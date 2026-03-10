@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+langchain
+langchain-google-genai
+chromadb
+sentence-transformers
+tavily-python
+beautifulsoup4
+playwright
+praw
+youtube-transcript-api
+requests
+python-dotenv
+pydantic
