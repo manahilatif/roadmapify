@@ -1,0 +1,55 @@
+{
+  "domain": "ielts_preparation",
+  "description": "Learning path for IELTS exam preparation",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Understanding the IELTS Exam",
+      "difficulty": "beginner",
+      "estimated_hours": 3,
+      "topics": ["Exam format", "Band score system", "Academic vs General", "Test day tips", "Registration process"],
+      "keywords": ["IELTS", "exam format", "band score", "academic", "general"]
+    },
+    {
+      "order": 2,
+      "title": "Reading Skills",
+      "difficulty": "beginner",
+      "estimated_hours": 20,
+      "topics": ["Skimming and scanning", "True/False/Not Given", "Matching headings", "Summary completion", "Time management"],
+      "keywords": ["reading", "skimming", "scanning", "True False", "IELTS reading"]
+    },
+    {
+      "order": 3,
+      "title": "Listening Skills",
+      "difficulty": "beginner",
+      "estimated_hours": 15,
+      "topics": ["Note taking", "Multiple choice", "Map labelling", "Form completion", "Accent familiarity"],
+      "keywords": ["listening", "note taking", "IELTS listening", "accents"]
+    },
+    {
+      "order": 4,
+      "title": "Writing Skills",
+      "difficulty": "intermediate",
+      "estimated_hours": 25,
+      "topics": ["Task 1 graphs and charts", "Task 2 essays", "Coherence and cohesion", "Lexical resource", "Grammar accuracy"],
+      "keywords": ["writing", "Task 1", "Task 2", "essays", "IELTS writing"]
+    },
+    {
+      "order": 5,
+      "title": "Speaking Skills",
+      "difficulty": "intermediate",
+      "estimated_hours": 20,
+      "topics": ["Part 1 introduction", "Part 2 cue card", "Part 3 discussion", "Fluency practice", "Pronunciation"],
+      "keywords": ["speaking", "cue card", "fluency", "pronunciation", "IELTS speaking"]
+    },
+    {
+      "order": 6,
+      "title": "Mock Tests & Final Preparation",
+      "difficulty": "advanced",
+      "estimated_hours": 20,
+      "topics": ["Full mock tests", "Timed practice", "Error analysis", "Weak area targeting", "Final revision"],
+      "keywords": ["mock test", "practice", "revision", "timed", "final prep"]
+    }
+  ]
+}

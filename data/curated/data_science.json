@@ -1,0 +1,55 @@
+{
+  "domain": "data_science",
+  "description": "Learning path for becoming a data scientist",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Python for Data Science",
+      "difficulty": "beginner",
+      "estimated_hours": 20,
+      "topics": ["Python basics", "NumPy", "Pandas", "Data manipulation", "File I/O"],
+      "keywords": ["Python", "NumPy", "Pandas", "data manipulation"]
+    },
+    {
+      "order": 2,
+      "title": "Statistics & Mathematics",
+      "difficulty": "beginner",
+      "estimated_hours": 20,
+      "topics": ["Descriptive statistics", "Probability", "Distributions", "Hypothesis testing", "Linear algebra basics"],
+      "keywords": ["statistics", "probability", "hypothesis", "linear algebra"]
+    },
+    {
+      "order": 3,
+      "title": "Data Visualization",
+      "difficulty": "beginner",
+      "estimated_hours": 10,
+      "topics": ["Matplotlib", "Seaborn", "Plotly", "EDA techniques", "Storytelling with data"],
+      "keywords": ["visualization", "Matplotlib", "Seaborn", "EDA"]
+    },
+    {
+      "order": 4,
+      "title": "Machine Learning Fundamentals",
+      "difficulty": "intermediate",
+      "estimated_hours": 35,
+      "topics": ["Supervised learning", "Unsupervised learning", "Scikit-learn", "Model evaluation", "Cross validation"],
+      "keywords": ["machine learning", "scikit-learn", "supervised", "unsupervised"]
+    },
+    {
+      "order": 5,
+      "title": "Deep Learning",
+      "difficulty": "advanced",
+      "estimated_hours": 40,
+      "topics": ["Neural networks", "TensorFlow", "PyTorch", "CNNs", "RNNs"],
+      "keywords": ["deep learning", "neural networks", "TensorFlow", "PyTorch"]
+    },
+    {
+      "order": 6,
+      "title": "Data Engineering Basics",
+      "difficulty": "advanced",
+      "estimated_hours": 20,
+      "topics": ["SQL for data science", "Data pipelines", "Airflow basics", "Cloud platforms", "Big data intro"],
+      "keywords": ["SQL", "pipelines", "Airflow", "cloud", "big data"]
+    }
+  ]
+}

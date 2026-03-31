@@ -1,0 +1,71 @@
+{
+  "domain": "web_development",
+  "description": "Learning path for becoming a full-stack web developer",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Internet & How the Web Works",
+      "difficulty": "beginner",
+      "estimated_hours": 5,
+      "topics": ["How does the internet work", "What is HTTP and HTTPS", "How browsers work", "What is DNS"],
+      "keywords": ["internet", "HTTP", "browser", "DNS"]
+    },
+    {
+      "order": 2,
+      "title": "HTML Fundamentals",
+      "difficulty": "beginner",
+      "estimated_hours": 10,
+      "topics": ["Basic HTML structure", "HTML tags and elements", "Forms and inputs", "Semantic HTML"],
+      "keywords": ["HTML", "tags", "forms", "semantic"]
+    },
+    {
+      "order": 3,
+      "title": "CSS Fundamentals",
+      "difficulty": "beginner",
+      "estimated_hours": 15,
+      "topics": ["CSS selectors", "Box model", "Flexbox", "CSS Grid", "Responsive design"],
+      "keywords": ["CSS", "flexbox", "grid", "responsive"]
+    },
+    {
+      "order": 4,
+      "title": "JavaScript Fundamentals",
+      "difficulty": "beginner",
+      "estimated_hours": 30,
+      "topics": ["Variables and data types", "Functions", "DOM manipulation", "Events", "Fetch API"],
+      "keywords": ["JavaScript", "DOM", "functions", "events"]
+    },
+    {
+      "order": 5,
+      "title": "React Basics",
+      "difficulty": "intermediate",
+      "estimated_hours": 25,
+      "topics": ["Components", "Props and state", "Hooks", "React Router", "useEffect"],
+      "keywords": ["React", "components", "hooks", "state"]
+    },
+    {
+      "order": 6,
+      "title": "Backend with Node.js",
+      "difficulty": "intermediate",
+      "estimated_hours": 25,
+      "topics": ["Node.js basics", "Express.js", "REST APIs", "Middleware", "Authentication"],
+      "keywords": ["Node.js", "Express", "REST", "API", "backend"]
+    },
+    {
+      "order": 7,
+      "title": "Databases",
+      "difficulty": "intermediate",
+      "estimated_hours": 20,
+      "topics": ["SQL basics", "PostgreSQL", "MongoDB", "Database design", "ORMs"],
+      "keywords": ["SQL", "MongoDB", "database", "PostgreSQL"]
+    },
+    {
+      "order": 8,
+      "title": "Deployment & DevOps Basics",
+      "difficulty": "advanced",
+      "estimated_hours": 15,
+      "topics": ["Git and GitHub", "Docker basics", "CI/CD", "Deploying to Vercel/Render", "Environment variables"],
+      "keywords": ["deployment", "Docker", "CI/CD", "Vercel", "Render"]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "domain": "uiux_design",
+  "description": "Learning path for becoming a UI/UX designer",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Design Fundamentals",
+      "difficulty": "beginner",
+      "estimated_hours": 10,
+      "topics": ["Design principles", "Color theory", "Typography", "Spacing and layout", "Visual hierarchy"],
+      "keywords": ["design", "color theory", "typography", "layout"]
+    },
+    {
+      "order": 2,
+      "title": "UX Research",
+      "difficulty": "beginner",
+      "estimated_hours": 15,
+      "topics": ["User interviews", "Surveys", "Personas", "User journey maps", "Competitive analysis"],
+      "keywords": ["UX research", "personas", "user journey", "interviews"]
+    },
+    {
+      "order": 3,
+      "title": "Wireframing & Prototyping",
+      "difficulty": "intermediate",
+      "estimated_hours": 20,
+      "topics": ["Low fidelity wireframes", "High fidelity mockups", "Figma basics", "Prototyping in Figma", "User flows"],
+      "keywords": ["wireframes", "prototyping", "Figma", "mockups"]
+    },
+    {
+      "order": 4,
+      "title": "Usability Testing",
+      "difficulty": "intermediate",
+      "estimated_hours": 10,
+      "topics": ["Test planning", "Moderated testing", "Unmoderated testing", "Analyzing results", "Iterating on feedback"],
+      "keywords": ["usability testing", "user testing", "feedback", "iteration"]
+    },
+    {
+      "order": 5,
+      "title": "Design Systems",
+      "difficulty": "advanced",
+      "estimated_hours": 15,
+      "topics": ["Component libraries", "Style guides", "Design tokens", "Accessibility in design", "Handoff to developers"],
+      "keywords": ["design system", "components", "accessibility", "style guide"]
+    }
+  ]
+}

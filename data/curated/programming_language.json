@@ -1,0 +1,71 @@
+{
+  "domain": "programming_language",
+  "description": "General learning path for picking up any new programming language",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Setup & Environment",
+      "difficulty": "beginner",
+      "estimated_hours": 2,
+      "topics": ["Installing the language runtime", "Setting up a code editor", "Running your first program", "Understanding the REPL", "Package manager basics"],
+      "keywords": ["setup", "environment", "runtime", "editor", "hello world"]
+    },
+    {
+      "order": 2,
+      "title": "Core Syntax & Basics",
+      "difficulty": "beginner",
+      "estimated_hours": 15,
+      "topics": ["Variables and data types", "Operators", "Conditionals", "Loops", "Functions"],
+      "keywords": ["variables", "data types", "conditionals", "loops", "functions"]
+    },
+    {
+      "order": 3,
+      "title": "Data Structures",
+      "difficulty": "beginner",
+      "estimated_hours": 12,
+      "topics": ["Arrays and lists", "Dictionaries and maps", "Sets", "Stacks and queues", "Choosing the right structure"],
+      "keywords": ["arrays", "lists", "dictionaries", "sets", "data structures"]
+    },
+    {
+      "order": 4,
+      "title": "Object Oriented or Functional Concepts",
+      "difficulty": "intermediate",
+      "estimated_hours": 20,
+      "topics": ["Classes and objects", "Inheritance", "Interfaces and abstractions", "Higher order functions", "Immutability"],
+      "keywords": ["OOP", "classes", "inheritance", "functional", "higher order functions"]
+    },
+    {
+      "order": 5,
+      "title": "Error Handling & Debugging",
+      "difficulty": "intermediate",
+      "estimated_hours": 8,
+      "topics": ["Try catch blocks", "Custom exceptions", "Debugging tools", "Reading error messages", "Logging"],
+      "keywords": ["error handling", "exceptions", "debugging", "try catch", "logging"]
+    },
+    {
+      "order": 6,
+      "title": "Working with Files & APIs",
+      "difficulty": "intermediate",
+      "estimated_hours": 10,
+      "topics": ["Reading and writing files", "JSON parsing", "Making HTTP requests", "REST API consumption", "Environment variables"],
+      "keywords": ["file I/O", "JSON", "HTTP", "REST API", "environment variables"]
+    },
+    {
+      "order": 7,
+      "title": "Testing & Best Practices",
+      "difficulty": "intermediate",
+      "estimated_hours": 12,
+      "topics": ["Unit testing", "Test driven development", "Code style and linting", "Documentation", "Version control with Git"],
+      "keywords": ["testing", "unit tests", "TDD", "linting", "documentation"]
+    },
+    {
+      "order": 8,
+      "title": "Building a Real Project",
+      "difficulty": "advanced",
+      "estimated_hours": 25,
+      "topics": ["Project planning", "Breaking into modules", "Dependency management", "Deploying the project", "Code review practices"],
+      "keywords": ["project", "modules", "dependencies", "deployment", "code review"]
+    }
+  ]
+}

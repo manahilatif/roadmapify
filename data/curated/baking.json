@@ -1,0 +1,63 @@
+{
+  "domain": "baking",
+  "description": "Learning path for baking from scratch — breads, pastries, and cakes",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Baking Fundamentals",
+      "difficulty": "beginner",
+      "estimated_hours": 4,
+      "topics": ["How baking differs from cooking", "Essential baking tools", "Understanding ingredients", "Measuring accurately", "Oven temperature and calibration"],
+      "keywords": ["baking basics", "measuring", "oven temperature", "ingredients", "baking tools"]
+    },
+    {
+      "order": 2,
+      "title": "Quick Breads & Muffins",
+      "difficulty": "beginner",
+      "estimated_hours": 8,
+      "topics": ["Muffin method", "Banana bread", "Scones", "Pancakes and waffles", "Baking powder vs baking soda"],
+      "keywords": ["muffins", "banana bread", "scones", "quick bread", "leavening"]
+    },
+    {
+      "order": 3,
+      "title": "Cookies & Bars",
+      "difficulty": "beginner",
+      "estimated_hours": 8,
+      "topics": ["Creaming method", "Chocolate chip cookies", "Brownies", "Shortbread", "Chilling and resting dough"],
+      "keywords": ["cookies", "brownies", "shortbread", "creaming method", "dough"]
+    },
+    {
+      "order": 4,
+      "title": "Cakes & Cupcakes",
+      "difficulty": "intermediate",
+      "estimated_hours": 15,
+      "topics": ["Layer cakes", "Sponge cake", "Buttercream frosting", "Ganache", "Decorating basics"],
+      "keywords": ["cake", "sponge", "buttercream", "ganache", "decorating"]
+    },
+    {
+      "order": 5,
+      "title": "Yeast Breads",
+      "difficulty": "intermediate",
+      "estimated_hours": 20,
+      "topics": ["How yeast works", "Kneading technique", "First and second rise", "Shaping loaves", "Sourdough starter basics"],
+      "keywords": ["yeast", "kneading", "bread rising", "sourdough", "loaf shaping"]
+    },
+    {
+      "order": 6,
+      "title": "Pastry & Tarts",
+      "difficulty": "advanced",
+      "estimated_hours": 20,
+      "topics": ["Shortcrust pastry", "Puff pastry", "Blind baking", "Tart fillings", "Choux pastry"],
+      "keywords": ["pastry", "shortcrust", "puff pastry", "tarts", "choux"]
+    },
+    {
+      "order": 7,
+      "title": "Advanced Baking",
+      "difficulty": "advanced",
+      "estimated_hours": 25,
+      "topics": ["Croissants and laminated dough", "Macarons", "Sugar work", "Chocolate tempering", "Designing your own recipes"],
+      "keywords": ["croissants", "laminated dough", "macarons", "sugar work", "chocolate tempering"]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "domain": "digital_marketing",
+  "description": "Learning path for becoming a digital marketer",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Marketing Fundamentals",
+      "difficulty": "beginner",
+      "estimated_hours": 8,
+      "topics": ["Marketing basics", "Target audience", "Brand identity", "Marketing funnel", "Value proposition"],
+      "keywords": ["marketing", "branding", "audience", "funnel"]
+    },
+    {
+      "order": 2,
+      "title": "Content Marketing",
+      "difficulty": "beginner",
+      "estimated_hours": 12,
+      "topics": ["Content strategy", "Blog writing", "SEO basics", "Content calendar", "Copywriting"],
+      "keywords": ["content marketing", "SEO", "blogging", "copywriting"]
+    },
+    {
+      "order": 3,
+      "title": "Social Media Marketing",
+      "difficulty": "intermediate",
+      "estimated_hours": 15,
+      "topics": ["Platform strategies", "Instagram marketing", "LinkedIn marketing", "Paid social ads", "Analytics"],
+      "keywords": ["social media", "Instagram", "LinkedIn", "ads"]
+    },
+    {
+      "order": 4,
+      "title": "Email Marketing",
+      "difficulty": "intermediate",
+      "estimated_hours": 10,
+      "topics": ["Email list building", "Campaign design", "Automation", "A/B testing", "Metrics"],
+      "keywords": ["email marketing", "automation", "campaigns", "A/B testing"]
+    },
+    {
+      "order": 5,
+      "title": "Analytics & Data",
+      "difficulty": "advanced",
+      "estimated_hours": 15,
+      "topics": ["Google Analytics", "Conversion tracking", "Attribution models", "Reporting", "Data-driven decisions"],
+      "keywords": ["analytics", "Google Analytics", "conversion", "reporting"]
+    }
+  ]
+}
