@@ -1,0 +1,22 @@
+{
+  "goal": "Learn data science from scratch",
+  "status": "sample",
+  "message": "Pipeline unavailable (missing GEMINI_API_KEY, ChromaDB/embedder error, or LLM failure). Set GEMINI_API_KEY in backend/.env and ensure ChromaDB is populated for full RAG output.",
+  "phases": [
+    {
+      "title": "Foundations",
+      "weeks": "1-2",
+      "topics": ["Core concepts", "Tools setup", "First small project"]
+    },
+    {
+      "title": "Practice",
+      "weeks": "3-6",
+      "topics": ["Guided exercises", "Mini projects", "Review mistakes"]
+    },
+    {
+      "title": "Build and ship",
+      "weeks": "7+",
+      "topics": ["Portfolio project", "Peer feedback", "Iterate"]
+    }
+  ]
+}
