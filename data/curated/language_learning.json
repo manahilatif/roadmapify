@@ -1,0 +1,71 @@
+{
+  "domain": "language_learning",
+  "description": "General learning path for picking up any new spoken language",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Getting Started",
+      "difficulty": "beginner",
+      "estimated_hours": 5,
+      "topics": ["Choosing learning resources", "Setting realistic goals", "Understanding language levels A1 to C2", "Daily study habits", "Motivation and consistency"],
+      "keywords": ["language learning", "CEFR", "A1", "goals", "consistency"]
+    },
+    {
+      "order": 2,
+      "title": "Pronunciation & Phonetics",
+      "difficulty": "beginner",
+      "estimated_hours": 10,
+      "topics": ["Sounds unique to the language", "IPA basics", "Listening to native speakers", "Shadowing technique", "Minimal pairs practice"],
+      "keywords": ["pronunciation", "phonetics", "IPA", "shadowing", "listening"]
+    },
+    {
+      "order": 3,
+      "title": "Core Vocabulary",
+      "difficulty": "beginner",
+      "estimated_hours": 20,
+      "topics": ["Top 500 most common words", "Spaced repetition with flashcards", "Numbers and dates", "Colors and objects", "Greetings and phrases"],
+      "keywords": ["vocabulary", "flashcards", "spaced repetition", "common words", "phrases"]
+    },
+    {
+      "order": 4,
+      "title": "Basic Grammar",
+      "difficulty": "beginner",
+      "estimated_hours": 20,
+      "topics": ["Sentence structure", "Verb conjugation basics", "Gender and articles", "Tenses — present and past", "Negation and questions"],
+      "keywords": ["grammar", "verb conjugation", "sentence structure", "tenses", "negation"]
+    },
+    {
+      "order": 5,
+      "title": "Listening & Reading Comprehension",
+      "difficulty": "intermediate",
+      "estimated_hours": 25,
+      "topics": ["Watching shows with subtitles", "Reading children's books", "Podcasts for learners", "News in slow language", "Extensive reading"],
+      "keywords": ["listening", "reading", "comprehension", "subtitles", "podcasts"]
+    },
+    {
+      "order": 6,
+      "title": "Speaking Practice",
+      "difficulty": "intermediate",
+      "estimated_hours": 30,
+      "topics": ["Language exchange partners", "Speaking to yourself", "iTalki and tutor sessions", "Common conversation topics", "Handling misunderstandings"],
+      "keywords": ["speaking", "conversation", "language exchange", "iTalki", "fluency"]
+    },
+    {
+      "order": 7,
+      "title": "Writing Skills",
+      "difficulty": "intermediate",
+      "estimated_hours": 15,
+      "topics": ["Journaling in the target language", "Writing emails and messages", "Getting corrections on italki", "Grammar in writing", "Building complex sentences"],
+      "keywords": ["writing", "journaling", "corrections", "complex sentences", "grammar"]
+    },
+    {
+      "order": 8,
+      "title": "Fluency & Advanced Use",
+      "difficulty": "advanced",
+      "estimated_hours": 50,
+      "topics": ["Thinking in the language", "Slang and idioms", "Regional accents", "Reading novels", "Achieving C1/C2 level"],
+      "keywords": ["fluency", "idioms", "slang", "accents", "C1 C2"]
+    }
+  ]
+}

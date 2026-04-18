@@ -1,0 +1,63 @@
+{
+  "domain": "cooking",
+  "description": "Learning path for home cooking from basics to advanced techniques",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Kitchen Basics",
+      "difficulty": "beginner",
+      "estimated_hours": 4,
+      "topics": ["Essential kitchen tools", "Knife safety and basic cuts", "Kitchen hygiene and food safety", "Reading a recipe", "Mise en place"],
+      "keywords": ["kitchen tools", "knife skills", "food safety", "recipe", "mise en place"]
+    },
+    {
+      "order": 2,
+      "title": "Heat and Cooking Methods",
+      "difficulty": "beginner",
+      "estimated_hours": 6,
+      "topics": ["Boiling and simmering", "Sauteing and stir frying", "Roasting and baking", "Steaming", "Frying"],
+      "keywords": ["boiling", "sauteing", "roasting", "steaming", "frying"]
+    },
+    {
+      "order": 3,
+      "title": "Flavor Building",
+      "difficulty": "beginner",
+      "estimated_hours": 8,
+      "topics": ["Salt and seasoning", "Herbs and spices", "Acids and balance", "Umami", "Tasting as you cook"],
+      "keywords": ["seasoning", "herbs", "spices", "flavor", "umami"]
+    },
+    {
+      "order": 4,
+      "title": "Proteins",
+      "difficulty": "intermediate",
+      "estimated_hours": 15,
+      "topics": ["Cooking chicken properly", "Beef cuts and doneness", "Fish and seafood", "Eggs every way", "Plant-based proteins"],
+      "keywords": ["chicken", "beef", "fish", "eggs", "protein cooking"]
+    },
+    {
+      "order": 5,
+      "title": "Sauces and Bases",
+      "difficulty": "intermediate",
+      "estimated_hours": 12,
+      "topics": ["Mother sauces", "Pan sauces", "Stocks and broths", "Emulsions", "Marinades and rubs"],
+      "keywords": ["sauces", "mother sauces", "stock", "emulsion", "marinade"]
+    },
+    {
+      "order": 6,
+      "title": "Cuisines of the World",
+      "difficulty": "intermediate",
+      "estimated_hours": 20,
+      "topics": ["Italian basics", "Asian stir fry techniques", "Middle Eastern flavors", "Mexican cooking", "Meal planning across cuisines"],
+      "keywords": ["Italian", "Asian", "Middle Eastern", "Mexican", "world cuisine"]
+    },
+    {
+      "order": 7,
+      "title": "Advanced Techniques",
+      "difficulty": "advanced",
+      "estimated_hours": 25,
+      "topics": ["Sous vide cooking", "Fermentation basics", "Making pasta from scratch", "Plating and presentation", "Menu planning"],
+      "keywords": ["sous vide", "fermentation", "pasta", "plating", "menu planning"]
+    }
+  ]
+}

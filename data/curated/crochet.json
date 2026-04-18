@@ -1,0 +1,63 @@
+{
+  "domain": "crochet",
+  "description": "Learning path for beginners to advanced crochet",
+  "difficulty_levels": ["beginner", "intermediate", "advanced"],
+  "modules": [
+    {
+      "order": 1,
+      "title": "Getting Started with Crochet",
+      "difficulty": "beginner",
+      "estimated_hours": 3,
+      "topics": ["Choosing the right hook", "Types of yarn", "Holding the hook and yarn", "Making a slip knot", "Chain stitch"],
+      "keywords": ["crochet hook", "yarn", "slip knot", "chain stitch", "beginner crochet"]
+    },
+    {
+      "order": 2,
+      "title": "Basic Stitches",
+      "difficulty": "beginner",
+      "estimated_hours": 8,
+      "topics": ["Single crochet", "Double crochet", "Half double crochet", "Slip stitch", "Turning chains"],
+      "keywords": ["single crochet", "double crochet", "basic stitches", "turning chain"]
+    },
+    {
+      "order": 3,
+      "title": "Reading Patterns",
+      "difficulty": "beginner",
+      "estimated_hours": 5,
+      "topics": ["Understanding abbreviations", "Reading written patterns", "Following stitch counts", "US vs UK terms", "Pattern symbols"],
+      "keywords": ["crochet pattern", "abbreviations", "stitch count", "US UK terms"]
+    },
+    {
+      "order": 4,
+      "title": "First Projects",
+      "difficulty": "beginner",
+      "estimated_hours": 10,
+      "topics": ["Crocheting a dishcloth", "Making a scarf", "Simple granny square", "Finishing and weaving in ends", "Blocking"],
+      "keywords": ["granny square", "scarf", "first project", "weaving ends", "blocking"]
+    },
+    {
+      "order": 5,
+      "title": "Intermediate Techniques",
+      "difficulty": "intermediate",
+      "estimated_hours": 20,
+      "topics": ["Working in the round", "Increasing and decreasing", "Color changes", "Joining squares", "Texture stitches"],
+      "keywords": ["working in round", "increasing", "decreasing", "color change", "texture"]
+    },
+    {
+      "order": 6,
+      "title": "Amigurumi & 3D Projects",
+      "difficulty": "intermediate",
+      "estimated_hours": 20,
+      "topics": ["Magic ring", "Crocheting spheres", "Stuffing and assembly", "Safety eyes", "Making animals and characters"],
+      "keywords": ["amigurumi", "magic ring", "stuffing", "safety eyes", "3D crochet"]
+    },
+    {
+      "order": 7,
+      "title": "Advanced Projects",
+      "difficulty": "advanced",
+      "estimated_hours": 30,
+      "topics": ["Garments and sizing", "Crochet charts", "Tunisian crochet", "Tapestry crochet", "Designing your own patterns"],
+      "keywords": ["garments", "crochet charts", "Tunisian", "tapestry", "pattern design"]
+    }
+  ]
+}
