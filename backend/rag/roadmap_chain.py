@@ -24,7 +24,7 @@ from backend.rag.rag_pipeline import retrieve_context
 # ── LLM setup ─────────────────────────────────────────────────────────────────
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
+    model="gemini-2.0-flash-lite",
     google_api_key=os.getenv("GEMINI_API_KEY"),
     temperature=0.3,
 )
