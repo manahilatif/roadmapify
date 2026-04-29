@@ -2,11 +2,11 @@ import { useState } from 'react'
 import Navbar from '../components/Navbar.jsx'
 
 const STEPS = [
-  { id:'topic',   question:"What do you want to learn?",     sub:'Be specific — "full-stack web dev" works better than just "coding".', type:'text',   field:'topic',        placeholder:'e.g. Machine Learning, Web Development, Data Science...' },
-  { id:'level',   question:"What's your current level?",     sub:'We use this to skip what you already know.',                          type:'choice', field:'level',        choices:[{v:'beginner',l:'Beginner',d:'Just starting out'},{v:'intermediate',l:'Intermediate',d:'Some experience'},{v:'advanced',l:'Advanced',d:'Solid foundation'}] },
-  { id:'goal',    question:"What is your main goal?",         sub:'This shapes which resources and projects we prioritize.',              type:'choice', field:'goal',         choices:[{v:'job',l:'Get a job',d:'Land a role in this field'},{v:'project',l:'Build a project',d:'Create something specific'},{v:'upskill',l:'Upskill',d:'Grow in my current role'},{v:'explore',l:'Explore',d:"See what it's about"}] },
-  { id:'hours',   question:"Hours per week you can commit?",  sub:"Be honest — we'd rather plan a realistic journey.",                   type:'slider', field:'hoursPerWeek', min:2, max:40, unit:'hrs/wk' },
-  { id:'weeks',   question:"Target completion in…",           sub:'Pick a timeframe that feels ambitious but doable.',                   type:'choice', field:'weeks',        choices:[{v:4,l:'1 month',d:'Intense sprint'},{v:8,l:'2 months',d:'Steady pace'},{v:16,l:'4 months',d:'Comfortable'},{v:26,l:'6 months',d:'Deep mastery'}] },
+  { id:'goal',    question:"What's your main goal?",          sub:'This helps us shape the kind of roadmap we build for you.',              type:'choice', field:'goal',         choices:[{v:'job',l:'Reach a goal',d:'e.g. bake a cake, run a 5K, pass an exam'},{v:'project',l:'Create something',d:'e.g. knit a sweater, build an app, write a song'},{v:'upskill',l:'Get better at this',d:'Improve a skill you already have'},{v:'explore',l:'Just exploring',d:"Curious and want to see what it's about"}] },
+  { id:'topic',   question:"What do you want to do?",         sub:'Be specific — "bake sourdough bread" works better than just "cooking".', type:'text',   field:'topic',        placeholder:'e.g. bake a chocolate chip cookie, learn Spanish, crochet a beanie...' },
+  { id:'level',   question:"What's your current level?",      sub:'We use this to skip what you already know.',                             type:'choice', field:'level',        choices:[{v:'beginner',l:'Beginner',d:'Just starting out'},{v:'intermediate',l:'Intermediate',d:'Some experience'},{v:'advanced',l:'Advanced',d:'Solid foundation'}] },
+  { id:'hours',   question:"Hours per week you can commit?",  sub:"Be honest — we'd rather plan a realistic journey.",                      type:'slider', field:'hoursPerWeek', min:2, max:40, unit:'hrs/wk' },
+  { id:'weeks',   question:"Target completion in…",           sub:'Pick a timeframe that feels ambitious but doable.',                      type:'choice', field:'weeks',        choices:[{v:4,l:'1 month',d:'Intense sprint'},{v:8,l:'2 months',d:'Steady pace'},{v:16,l:'4 months',d:'Comfortable'},{v:26,l:'6 months',d:'Deep mastery'}] },
 ]
 
 function Dots({ step, total }) {
