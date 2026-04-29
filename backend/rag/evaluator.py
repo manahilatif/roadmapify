@@ -87,7 +87,7 @@ def baseline_generate(query: str) -> dict:
     from langchain_core.prompts import ChatPromptTemplate
 
     llm = ChatGroq(
-        model="llama3-70b-8192", 
+        model="llama-3.3-70b-versatile", 
         groq_api_key=os.getenv("GROQ_API_KEY"), 
         temperature=0.3
     )
