@@ -12,3 +12,5 @@ youtube-transcript-api
 requests
 python-dotenv
 pydantic
+langchain-groq>=0.3.0
+groq>=0.28.0
