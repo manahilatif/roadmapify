@@ -1,106 +1,99 @@
 """
 roadmap_chain.py
 ----------------
-LangChain orchestration for Roadmapify.
-Retrieves context from ChromaDB, then calls Gemini 1.5 Flash to generate
-a structured JSON learning roadmap.
+LangChain orchestration: retrieves context from ChromaDB
+then calls Groq (llama3-70b) to generate a structured roadmap.
 """
-
-import os
 import sys
 import pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-# Allow imports from project root when run directly
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
-
+import os
+import json
+import pathlib
+import re
 from dotenv import load_dotenv
-load_dotenv()
-
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
+
+load_dotenv(dotenv_path=pathlib.Path(__file__).resolve().parents[2] / "backend" / ".env")
+
 from backend.rag.rag_pipeline import retrieve_context
 
-
-# ── LLM setup ─────────────────────────────────────────────────────────────────
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash-lite",
-    google_api_key=os.getenv("GEMINI_API_KEY"),
+# ── LLM setup ────────────────────────────────────────────────────────────────
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    groq_api_key=os.getenv("GROQ_API_KEY"),
     temperature=0.3,
 )
 
-
-# ── Prompt ────────────────────────────────────────────────────────────────────
-
-SYSTEM_PROMPT = """You are Roadmapify, an expert learning coach and curriculum designer.
-Using the retrieved knowledge base content below, generate a structured, personalized learning roadmap.
+SYSTEM_PROMPT = """You are Roadmapify, an expert learning coach.
+Using the retrieved knowledge provided, generate a structured, personalized learning roadmap.
 
 Retrieved Knowledge:
 {context}
 
 Rules:
-- Output ONLY a valid JSON object. No explanation, no markdown, no code fences.
-- JSON structure must be exactly:
-  {{
-    "title": "string",
-    "description": "string",
-    "estimated_total_weeks": number,
-    "stages": [
-      {{
-        "stage_number": number,
-        "title": "string",
-        "duration_weeks": number,
-        "topics": ["string", ...],
-        "resources": [
-          {{
-            "name": "string",
-            "url": "string",
-            "type": "string"
-          }}
-        ]
-      }}
-    ]
-  }}
-- Be specific, actionable, and realistic about time estimates
-- Tailor difficulty and pace to the user's stated experience level
-- Only include resources that are real, accessible, and free unless otherwise stated
-- Aim for 4-6 stages total
+- Output ONLY a valid JSON object. No explanation, no markdown, no backticks.
+- The JSON must have this exact structure:
+{{
+  "title": "Roadmap title here",
+  "stages": [
+    {{
+      "stage_number": 1,
+      "title": "Stage title",
+      "duration_weeks": 2,
+      "topics": ["topic1", "topic2"],
+      "resources": ["Resource Name - URL or description"]
+    }}
+  ]
+}}
+- Include 4-6 stages total
+- Be specific and actionable
+- Tailor to the user's stated level and time commitment
 """
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
-    ("human", "{user_input}"),
+    ("human", "Goal: {user_input}\nDifficulty: {difficulty}\nTime available: {time_commitment}"),
 ])
 
 chain = prompt | llm
 
 
-# ── Main function ─────────────────────────────────────────────────────────────
-
-def generate_roadmap(user_input: str) -> str:
-    """
-    Generate a structured JSON learning roadmap for the given user input.
-
-    Args:
-        user_input: the user's learning goal (e.g. "I want to learn web development")
-
-    Returns:
-        A JSON string representing the personalized roadmap.
-    """
+def generate_roadmap(user_input: str, difficulty: str = "beginner", time_commitment: str = "3 months") -> dict:
+    """Returns a parsed roadmap dict."""
     context = retrieve_context(user_input)
-
     response = chain.invoke({
         "context": context,
         "user_input": user_input,
+        "difficulty": difficulty,
+        "time_commitment": time_commitment,
     })
+    raw = response.content.strip()
 
-    return response.content
+    # Strip markdown fences if present
+    raw = re.sub(r"^```json\s*", "", raw)
+    raw = re.sub(r"```$", "", raw).strip()
 
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Return a safe fallback so the API never crashes
+        return {
+            "title": f"Roadmap for: {user_input}",
+            "stages": [
+                {
+                    "stage_number": 1,
+                    "title": "Getting Started",
+                    "duration_weeks": 2,
+                    "topics": ["Fundamentals", "Setup"],
+                    "resources": ["Search for beginner guides on this topic"],
+                }
+            ],
+        }
 
-# ── Quick test ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    test_input = "I want to learn web development as a complete beginner"
-    print(f"[test] Generating roadmap for: '{test_input}'\n")
-    result = generate_roadmap(test_input)
-    print(result)
+    result = generate_roadmap("learn Python as a complete beginner", "beginner", "3 months")
+    print(json.dumps(result, indent=2))

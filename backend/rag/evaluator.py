@@ -18,8 +18,10 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
 from dotenv import load_dotenv
 load_dotenv()
 
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from backend.rag.rag_pipeline import retrieve_context
-from backend.rag.roadmap_chain import generate_roadmap  # ✅ correct import path
+from backend.rag.roadmap_chain import generate_roadmap 
 
 TEST_QUERIES = [
     {"query": "I want to learn web development from scratch", "domain": "web_dev", "level": "beginner"},
@@ -80,17 +82,16 @@ def evaluate_hallucination(roadmap_output: dict, context: str) -> float:
 
 
 def baseline_generate(query: str) -> dict:
-    """
-    Baseline: call Gemini directly WITHOUT retrieval context.
-    """
-    from langchain_google_genai import ChatGoogleGenerativeAI
+ 
+    from langchain_groq import ChatGroq
     from langchain_core.prompts import ChatPromptTemplate
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite",
-        google_api_key=os.getenv("GEMINI_API_KEY"),
-        temperature=0.3,
+    llm = ChatGroq(
+        model="llama3-70b-8192", 
+        groq_api_key=os.getenv("GROQ_API_KEY"), 
+        temperature=0.3
     )
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", "Generate a learning roadmap as JSON with fields: title, description, estimated_total_weeks, stages (each with stage_number, title, duration_weeks, topics, resources). Output ONLY valid JSON, no markdown."),
         ("human", "{query}")
