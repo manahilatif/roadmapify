@@ -1,6 +1,9 @@
+import { useNavigate } from 'react-router-dom'
 import Logo from './Logo.jsx'
 
 export default function Navbar({ onStart, onBack, showBack = false }) {
+  const navigate = useNavigate()
+
   return (
     <nav style={{
       position: 'fixed', top:0, left:0, right:0, zIndex:100,
@@ -11,7 +14,7 @@ export default function Navbar({ onStart, onBack, showBack = false }) {
       WebkitBackdropFilter: 'blur(14px)',
       borderBottom: '1px solid var(--border)',
     }}>
-      <div style={{ cursor: showBack ? 'pointer' : 'default' }} onClick={showBack ? onBack : undefined}>
+      <div style={{ cursor:'pointer' }} onClick={() => navigate('/')}>
         <Logo size="md" />
       </div>
       <div style={{ display:'flex', gap:'10px' }}>
