@@ -1,4 +1,7 @@
-import { useState } from 'react'
+// src/pages/OnboardingPage.jsx
+// CHANGED: accepts optional `prefill` prop — when a user clicks an example card,
+// answers are pre-populated and the wizard jumps to the last step for confirmation.
+import { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar.jsx'
 
 const STEPS = [
@@ -8,6 +11,8 @@ const STEPS = [
   { id:'hours',   question:"Hours per week you can commit?",  sub:"Be honest — we'd rather plan a realistic journey.",                      type:'slider', field:'hoursPerWeek', min:2, max:40, unit:'hrs/wk' },
   { id:'weeks',   question:"Target completion in…",           sub:'Pick a timeframe that feels ambitious but doable.',                      type:'choice', field:'weeks',        choices:[{v:4,l:'1 month',d:'Intense sprint'},{v:8,l:'2 months',d:'Steady pace'},{v:16,l:'4 months',d:'Comfortable'},{v:26,l:'6 months',d:'Deep mastery'}] },
 ]
+
+const DEFAULT_ANSWERS = { topic:'', level:'', goal:'', hoursPerWeek:10, weeks:8 }
 
 function Dots({ step, total }) {
   return (
@@ -36,10 +41,21 @@ function Choice({ c, selected, onSelect }) {
   )
 }
 
-export default function OnboardingPage({ onGenerate, onBack }) {
-  const [step, setStep] = useState(0)
+export default function OnboardingPage({ onGenerate, onBack, prefill }) {
+  // If prefill exists, start on the last step (confirm / generate)
+  const [step, setStep] = useState(prefill ? STEPS.length - 1 : 0)
   const [loading, setLoading] = useState(false)
-  const [answers, setAnswers] = useState({ topic:'', level:'', goal:'', hoursPerWeek:10, weeks:8 })
+  const [answers, setAnswers] = useState(
+    prefill ? { ...DEFAULT_ANSWERS, ...prefill } : DEFAULT_ANSWERS
+  )
+
+  // If prefill changes (e.g. user goes back and picks a different example), sync it
+  useEffect(() => {
+    if (prefill) {
+      setAnswers({ ...DEFAULT_ANSWERS, ...prefill })
+      setStep(STEPS.length - 1)
+    }
+  }, [prefill])
 
   const cur = STEPS[step]
   const val = answers[cur.field]
@@ -49,11 +65,12 @@ export default function OnboardingPage({ onGenerate, onBack }) {
     if (step < STEPS.length - 1) { setStep(s=>s+1); return }
     setLoading(true)
     try {
-      // Call your existing backend endpoint
-      const res = await fetch('http://localhost:8000/generate-roadmap', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/generate-roadmap`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ goal: `Learn ${answers.topic} as a ${answers.level}. Goal: ${answers.goal}. ${answers.hoursPerWeek} hours/week for ${answers.weeks} weeks.` })
+        body: JSON.stringify({
+          goal: `Learn ${answers.topic} as a ${answers.level}. Goal type: ${answers.goal}. ${answers.hoursPerWeek} hours/week for ${answers.weeks} weeks.`
+        })
       })
       const data = await res.json()
       onGenerate({ ...data, userAnswers: answers })
@@ -75,6 +92,21 @@ export default function OnboardingPage({ onGenerate, onBack }) {
   return (
     <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 24px 40px' }}>
       <Navbar onBack={onBack} showBack />
+
+      {/* Prefill banner — shows when user came from an example card */}
+      {prefill && (
+        <div style={{
+          width:'100%', maxWidth:'500px',
+          background:'rgba(229,41,41,0.08)', border:'1px solid rgba(229,41,41,0.2)',
+          borderRadius:'10px', padding:'10px 16px', marginBottom:'16px',
+          display:'flex', alignItems:'center', gap:'10px',
+          fontSize:'0.8rem', color:'var(--r3)',
+        }}>
+          <span style={{ fontSize:'14px' }}>✦</span>
+          Pre-filled from an example — tweak anything you like before generating.
+        </div>
+      )}
+
       <div style={{ width:'100%', maxWidth:'500px', animation:'fadeUp 0.4s var(--ease)' }}>
         <Dots step={step} total={STEPS.length} />
         <div style={{ fontSize:'0.68rem', fontFamily:"'Syne',sans-serif", fontWeight:700, letterSpacing:'0.09em', textTransform:'uppercase', color:'var(--tm)', textAlign:'center', marginBottom:'10px' }}>Step {step+1} of {STEPS.length}</div>
