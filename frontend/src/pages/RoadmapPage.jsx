@@ -1,526 +1,360 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import Navbar from '../components/Navbar.jsx'
 
-// ── XP bar component ───────────────────────────────────────────────────────────
-function XPBar({ earned, total }) {
-  const pct = Math.round((earned / total) * 100)
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>
-        {earned} / {total} XP
-      </span>
-      <div style={{ width: 120, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.1)' }}>
-        <div style={{
-          height: '100%', borderRadius: 3,
-          width: `${pct}%`, background: 'var(--accent)',
-          transition: 'width 0.6s cubic-bezier(0.34,1.56,0.64,1)',
-          boxShadow: '0 0 8px var(--accent)',
-        }} />
-      </div>
-      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{pct}%</span>
-    </div>
-  )
+/* ── Normalise both old (stages) and new (nodes) backend shapes ──────────────*/
+function normalise(data) {
+  if (data.nodes && Array.isArray(data.nodes)) {
+    return data.nodes.map((n, i) => ({
+      id:             n.id || `n${i}`,
+      label:          n.title || n.label || `Step ${i + 1}`,
+      type:           n.type || 'main',
+      week:           n.duration_label || n.week || `Week ${i + 1}`,
+      xp_reward:      n.xp_reward || 100,
+      description:    n.description || '',
+      emoji:          n.emoji || '',
+      resources:      n.resources || [],
+      topics:         n.topics || [],
+      dependencies:   i === 0 ? [] : [data.nodes[i - 1]?.id || `n${i - 1}`],
+      status:         n.status || (i === 0 ? 'active' : 'locked'),
+    }))
+  }
+  if (data.stages && Array.isArray(data.stages)) {
+    return data.stages.map((s, i) => ({
+      id:           s.id || `s${i}`,
+      label:        s.title || s.name || `Stage ${i + 1}`,
+      type:         s.type || 'main',
+      week:         s.week_start || s.week || i + 1,
+      xp_reward:    100,
+      description:  '',
+      emoji:        '',
+      resources:    s.resources || [],
+      topics:       s.topics || [],
+      dependencies: i === 0 ? [] : [data.stages[i - 1]?.id || `s${i - 1}`],
+      status:       i === 0 ? 'active' : 'locked',
+    }))
+  }
+  return []
 }
 
-// ── Mini confetti burst ────────────────────────────────────────────────────────
-function ConfettiBurst({ x, y, onDone }) {
-  const colors = ['#dc2626', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6']
-  const particles = Array.from({ length: 18 }, (_, i) => ({
+function layoutNodes(nodes) {
+  const main  = nodes.filter(n => n.type !== 'bonus')
+  const bonus = nodes.filter(n => n.type === 'bonus')
+  const pos   = {}
+  const CX = 185, AMP = 78, RH = 92
+  main.forEach((n, i)  => { pos[n.id] = { x: CX + Math.sin(i * 1.15) * AMP, y: 64 + i * RH } })
+  bonus.forEach((n, i) => {
+    const pid = n.dependencies?.[0]
+    const p   = pid && pos[pid] ? pos[pid] : { x: CX, y: 64 }
+    pos[n.id] = { x: p.x + 115 + (i % 2) * 14, y: p.y + (i % 2 === 0 ? -24 : 40) }
+  })
+  return pos
+}
+
+/* ── Confetti ─────────────────────────────────────────────────────────────────*/
+function Confetti({ x, y, onDone }) {
+  const colors = ['#e52929', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6']
+  const pieces = Array.from({ length: 16 }, (_, i) => ({
     id: i, color: colors[i % colors.length],
-    angle: (i / 18) * 360,
-    distance: 40 + Math.random() * 60,
+    angle: (i / 16) * 360, dist: 40 + Math.random() * 50,
   }))
-  useEffect(() => { const t = setTimeout(onDone, 1000); return () => clearTimeout(t) }, [onDone])
+  useState(() => { const t = setTimeout(onDone, 1000); return () => clearTimeout(t) })
   return (
-    <div style={{ position: 'fixed', left: x, top: y, pointerEvents: 'none', zIndex: 1000 }}>
-      {particles.map(p => (
+    <div style={{ position: 'fixed', left: x, top: y, pointerEvents: 'none', zIndex: 999 }}>
+      {pieces.map(p => (
         <div key={p.id} style={{
           position: 'absolute', width: 6, height: 6, borderRadius: '50%',
-          background: p.color, left: 0, top: 0,
-          animation: `confetti-fly 0.9s ease-out forwards`,
-          '--angle': `${p.angle}deg`, '--dist': `${p.distance}px`,
+          background: p.color, animation: 'confetti-pop 0.9s ease-out forwards',
+          '--deg': `${p.angle}deg`, '--d': `${p.dist}px`,
         }} />
       ))}
     </div>
   )
 }
 
-// ── XP float label ─────────────────────────────────────────────────────────────
 function XPFloat({ xp, onDone }) {
-  useEffect(() => { const t = setTimeout(onDone, 1200); return () => clearTimeout(t) }, [onDone])
+  useState(() => { const t = setTimeout(onDone, 1200); return () => clearTimeout(t) })
   return (
     <div style={{
-      position: 'fixed', bottom: 100, right: 32, zIndex: 999,
-      fontSize: 22, fontWeight: 700, color: '#fbbf24',
-      fontFamily: 'var(--font-display)',
-      animation: 'xp-float 1.2s ease-out forwards',
+      position: 'fixed', bottom: 100, right: 340, zIndex: 999,
+      fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: '1.4rem',
+      color: '#f59e0b', animation: 'xp-up 1.2s ease-out forwards', pointerEvents: 'none',
     }}>
       +{xp} XP ⚡
     </div>
   )
 }
 
-// ── Node component ─────────────────────────────────────────────────────────────
-function RoadmapNode({ node, index, total, isLeft, onClick }) {
-  const isActive  = node.status === 'active'
-  const isDone    = node.status === 'done'
-  const isLocked  = node.status === 'locked'
-  const isBonus   = node.type === 'bonus'
-
-  const nodeSize = isActive ? 86 : 72
-
-  const bgColor = isDone
-    ? 'rgba(16,185,129,0.2)'
-    : isActive
-    ? 'rgba(220,38,38,0.25)'
-    : isBonus
-    ? 'rgba(251,191,36,0.1)'
-    : 'rgba(255,255,255,0.05)'
-
-  const borderColor = isDone
-    ? '#10b981'
-    : isActive
-    ? 'var(--accent)'
-    : isBonus
-    ? '#fbbf24'
-    : 'rgba(255,255,255,0.12)'
+/* ── Map node ─────────────────────────────────────────────────────────────────*/
+function MapNode({ node, pos, state, isSelected, onClick, idx }) {
+  const isBonus  = node.type === 'bonus'
+  const isDone   = state === 'done'
+  const isActive = state === 'active'
+  const isLocked = state === 'locked'
+  const r = isBonus ? 24 : 30
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-      cursor: isLocked && !isBonus ? 'not-allowed' : 'pointer',
-      opacity: isLocked && !isBonus ? 0.45 : 1,
-      transition: 'opacity 0.3s',
-    }} onClick={() => !isLocked && onClick(node)}>
+    <g style={{ cursor: isLocked ? 'not-allowed' : 'pointer', animation: `fadeUp 0.4s var(--ease) both ${0.04 + idx * 0.055}s`, opacity: 0 }}
+      onClick={() => !isLocked && onClick(node)}>
+      {isActive && <>
+        <circle cx={pos.x} cy={pos.y} r={r + 13} fill="none" stroke="rgba(229,41,41,0.32)" strokeWidth="1.5" style={{ animation: 'pulse-ring 2s ease-out infinite' }} />
+        <circle cx={pos.x} cy={pos.y} r={r + 22} fill="none" stroke="rgba(229,41,41,0.12)" strokeWidth="1"   style={{ animation: 'pulse-ring 2s ease-out 0.5s infinite' }} />
+      </>}
+      {isSelected && !isActive && (
+        <circle cx={pos.x} cy={pos.y} r={r + 9} fill="none" stroke="rgba(229,41,41,0.4)" strokeWidth="2" strokeDasharray="4 3" />
+      )}
+      <circle cx={pos.x} cy={pos.y} r={r}
+        fill={isDone ? '#1c1c1c' : isActive ? '#e52929' : isBonus ? '#1e1800' : '#181818'}
+        stroke={isSelected ? '#e52929' : isDone ? '#3a3a3a' : isActive ? '#e52929' : isBonus ? '#ca9a04' : '#2a2a2a'}
+        strokeWidth={isActive || isSelected ? 2.5 : 1.5}
+        style={isActive ? { filter: 'drop-shadow(0 0 13px rgba(229,41,41,0.55))' } : {}}
+      />
+      <text x={pos.x} y={pos.y + 6} textAnchor="middle" style={{ fontSize: isActive ? '11px' : '15px', fontFamily: "'Syne',sans-serif", fontWeight: 800, fill: isDone ? '#444' : isActive ? '#fff' : isBonus ? '#ca9a04' : '#333', userSelect: 'none', pointerEvents: 'none' }}>
+        {isDone ? '✓' : isActive ? (node.emoji || 'NOW') : isBonus ? '★' : '🔒'}
+      </text>
+      <text x={pos.x} y={pos.y + r + 17} textAnchor="middle" style={{ fontFamily: "'DM Sans',sans-serif", fontSize: '11.5px', fill: isLocked ? '#3a3a3a' : isBonus ? '#ca9a04' : isActive ? '#f87171' : '#5a5a5a', fontWeight: isActive ? 600 : 400, userSelect: 'none', pointerEvents: 'none' }}>
+        {node.label}
+      </text>
+      <text x={pos.x} y={pos.y - r - 7} textAnchor="middle" style={{ fontFamily: "'Syne',sans-serif", fontSize: '9px', fill: 'rgba(255,255,255,0.11)', userSelect: 'none', pointerEvents: 'none', letterSpacing: '0.06em' }}>
+        {typeof node.week === 'number' ? `WK ${node.week}` : node.week}
+      </text>
+    </g>
+  )
+}
 
-      {/* Duration label above */}
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-        {node.duration_label}
-      </div>
+/* ── Sidebar ──────────────────────────────────────────────────────────────────*/
+function NodePanel({ node, state, onClose, onComplete }) {
+  const isBonus = node.type === 'bonus'
+  const isDone  = state === 'done'
+  const icons   = ['📹', '📄', '🎓']
 
-      {/* Node circle */}
-      <div style={{ position: 'relative' }}>
-        {/* Pulse rings for active node */}
-        {isActive && (
-          <>
-            <div style={{
-              position: 'absolute', inset: -12, borderRadius: '50%',
-              border: '2px solid rgba(220,38,38,0.4)',
-              animation: 'pulse-ring 2s ease-out infinite',
-            }} />
-            <div style={{
-              position: 'absolute', inset: -20, borderRadius: '50%',
-              border: '1.5px solid rgba(220,38,38,0.2)',
-              animation: 'pulse-ring 2s ease-out infinite 0.4s',
-            }} />
-          </>
-        )}
+  // Handle both string[] (old) and {label,url,tip}[] (new) resource formats
+  const resources = (Array.isArray(node.resources) ? node.resources : []).map(r =>
+    typeof r === 'string' ? { label: r, url: '', tip: '' } : r
+  )
 
-        <div style={{
-          width: nodeSize, height: nodeSize, borderRadius: '50%',
-          background: bgColor, border: `2px solid ${borderColor}`,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          boxShadow: isActive ? `0 0 24px rgba(220,38,38,0.4)` : isDone ? `0 0 16px rgba(16,185,129,0.3)` : 'none',
-          transition: 'all 0.3s',
-          position: 'relative', zIndex: 2,
-        }}>
-          {isDone ? (
-            <span style={{ fontSize: 24 }}>✓</span>
-          ) : isLocked && !isBonus ? (
-            <span style={{ fontSize: 20 }}>🔒</span>
-          ) : (
-            <span style={{ fontSize: isActive ? 28 : 22 }}>{node.emoji || '⭐'}</span>
-          )}
+  return (
+    <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: '310px', background: 'var(--s0)', borderLeft: '1px solid var(--border)', padding: '24px 20px', overflowY: 'auto', zIndex: 50, animation: 'fadeUp 0.22s var(--ease)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ paddingTop: '68px' }}>
+        <div className={`badge ${isBonus ? 'badge-gold' : 'badge-red'}`} style={{ marginBottom: '10px' }}>
+          {isBonus ? '★ Bonus quest' : 'Main path'}
         </div>
+        <h3 style={{ fontSize: '1.3rem', letterSpacing: '-0.02em' }}>
+          {node.emoji ? `${node.emoji} ` : ''}{node.label}
+        </h3>
+      </div>
 
-        {/* XP badge */}
-        {(isActive || isDone) && (
-          <div style={{
-            position: 'absolute', bottom: -2, right: -4,
-            background: isDone ? '#10b981' : 'var(--accent)',
-            borderRadius: 10, padding: '2px 6px',
-            fontSize: 10, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap',
-          }}>
-            {isDone ? '✓' : `+${node.xp_reward}`}
+      <button onClick={onClose} style={{ position: 'absolute', top: '76px', right: '16px', background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: '8px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--ts)', fontSize: '16px' }}>×</button>
+
+      {/* Meta */}
+      <div style={{ background: 'var(--s1)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div>
+          <div style={{ fontSize: '0.68rem', color: 'var(--tm)', marginBottom: '3px' }}>Duration</div>
+          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '1rem' }}>{node.week}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: '0.68rem', color: 'var(--tm)', marginBottom: '3px' }}>XP reward</div>
+          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '1rem', color: '#f59e0b' }}>⚡ {node.xp_reward}</div>
+        </div>
+        <div style={{ gridColumn: '1/-1' }}>
+          <div style={{ fontSize: '0.68rem', color: 'var(--tm)', marginBottom: '5px' }}>Status</div>
+          <span className={`badge ${state === 'active' ? 'badge-red' : 'badge-gray'}`}>
+            {isDone ? '✓ Completed' : state === 'active' ? '▶ In progress' : '🔒 Locked'}
+          </span>
+        </div>
+      </div>
+
+      {/* Description (new format) */}
+      {node.description && (
+        <div>
+          <div style={{ fontSize: '0.65rem', fontFamily: "'Syne',sans-serif", fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--tm)', marginBottom: '9px' }}>What to do</div>
+          <p style={{ fontSize: '0.875rem', color: 'var(--ts)', lineHeight: 1.6, margin: 0 }}>{node.description}</p>
+        </div>
+      )}
+
+      {/* Topics (old format) */}
+      {node.topics && node.topics.length > 0 && (
+        <div>
+          <div style={{ fontSize: '0.65rem', fontFamily: "'Syne',sans-serif", fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--tm)', marginBottom: '9px' }}>Topics covered</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {node.topics.map((t, i) => (
+              <span key={i} style={{ background: 'var(--s2)', border: '1px solid var(--border-md)', borderRadius: '6px', padding: '4px 10px', fontSize: '0.78rem', color: 'var(--ts)' }}>{t}</span>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Node title */}
-      <div style={{
-        fontSize: 13, fontWeight: isActive ? 700 : 500,
-        color: isActive ? 'var(--text)' : isDone ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.5)',
-        textAlign: 'center', maxWidth: 110, lineHeight: 1.3,
-      }}>
-        {node.title}
-      </div>
+      {/* Resources — links work, tips shown, icons preserved */}
+      {resources.length > 0 && (
+        <div>
+          <div style={{ fontSize: '0.65rem', fontFamily: "'Syne',sans-serif", fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--tm)', marginBottom: '9px' }}>Curated resources</div>
+          {resources.map((r, i) => {
+            const hasLink = r.url && r.url.trim() !== ''
+            const card = (
+              <div style={{ background: 'var(--s1)', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: '9px', marginBottom: '6px', transition: 'border-color 0.15s', cursor: hasLink ? 'pointer' : 'default' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(229,41,41,0.28)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              >
+                <div style={{ width: '26px', height: '26px', background: 'rgba(229,41,41,0.09)', border: '1px solid rgba(229,41,41,0.15)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0, marginTop: '1px' }}>{icons[i % 3]}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--tp)' }}>{r.label}</div>
+                  {r.tip && <div style={{ fontSize: '0.75rem', color: 'var(--tm)', marginTop: '2px' }}>{r.tip}</div>}
+                  {hasLink && <div style={{ fontSize: '0.72rem', color: 'var(--r4)', marginTop: '3px' }}>Open resource →</div>}
+                </div>
+              </div>
+            )
+            return hasLink
+              ? <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'block' }}>{card}</a>
+              : <div key={i}>{card}</div>
+          })}
+        </div>
+      )}
+
+      {/* CTA */}
+      {state !== 'locked' && (
+        <div style={{ marginTop: 'auto' }}>
+          {isDone
+            ? <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', padding: '13px' }}>✓ Completed</button>
+            : <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px' }} onClick={() => onComplete(node)}>
+                {isBonus ? '⭐ Complete bonus level' : '✓ Mark as complete'}
+              </button>
+          }
+        </div>
+      )}
     </div>
   )
 }
 
-// ── Side panel ─────────────────────────────────────────────────────────────────
-function NodePanel({ node, onClose, onComplete }) {
-  if (!node) return null
-  const isDone   = node.status === 'done'
-  const isBonus  = node.type === 'bonus'
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div onClick={onClose} style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200,
-        animation: 'fade-in 0.2s ease',
-      }} />
-
-      {/* Panel */}
-      <div style={{
-        position: 'fixed', right: 0, top: 0, bottom: 0, width: 'min(440px, 100vw)',
-        background: '#111', borderLeft: '1px solid rgba(255,255,255,0.08)',
-        zIndex: 201, overflowY: 'auto', padding: '32px 28px',
-        animation: 'slide-in-right 0.3s cubic-bezier(0.4,0,0.2,1)',
-        display: 'flex', flexDirection: 'column', gap: 20,
-      }}>
-        {/* Close */}
-        <button onClick={onClose} style={{
-          alignSelf: 'flex-end', background: 'none', border: 'none',
-          color: 'rgba(255,255,255,0.4)', fontSize: 22, cursor: 'pointer', padding: 0,
-        }}>✕</button>
-
-        {/* Emoji + title */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 52, marginBottom: 8 }}>{node.emoji || (isBonus ? '⭐' : '🎯')}</div>
-          {isBonus && (
-            <div style={{
-              display: 'inline-block', padding: '3px 12px', borderRadius: 20, marginBottom: 8,
-              background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)',
-              fontSize: 11, color: '#fbbf24', letterSpacing: '0.08em', textTransform: 'uppercase',
-            }}>✦ Bonus Level</div>
-          )}
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, marginBottom: 6 }}>
-            {node.title}
-          </h2>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>{node.duration_label}</div>
-        </div>
-
-        {/* XP badge */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          padding: '10px 0', borderRadius: 10,
-          background: isDone ? 'rgba(16,185,129,0.1)' : 'rgba(220,38,38,0.1)',
-          border: `1px solid ${isDone ? 'rgba(16,185,129,0.3)' : 'rgba(220,38,38,0.3)'}`,
-        }}>
-          <span style={{ fontSize: 18 }}>⚡</span>
-          <span style={{ fontWeight: 700, fontSize: 17 }}>{node.xp_reward} XP</span>
-          {isDone && <span style={{ color: '#10b981', fontSize: 13 }}>— earned!</span>}
-        </div>
-
-        {/* Description */}
-        <div>
-          <h3 style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
-            What to do
-          </h3>
-          <p style={{ color: 'rgba(255,255,255,0.8)', lineHeight: 1.7, fontSize: 15 }}>
-            {node.description}
-          </p>
-        </div>
-
-        {/* Resources */}
-        {node.resources?.length > 0 && (
-          <div>
-            <h3 style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
-              Resources
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {node.resources.map((r, i) => (
-                <div key={i} style={{
-                  padding: '12px 16px', borderRadius: 10,
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: r.tip ? 4 : 0 }}>{r.label}</div>
-                  {r.tip && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>{r.tip}</div>}
-                  {r.url && (
-                    <a href={r.url} target="_blank" rel="noopener noreferrer" style={{
-                      fontSize: 12, color: 'var(--accent)', marginTop: 4, display: 'block',
-                    }}>
-                      Open →
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Complete button */}
-        {!isDone && (
-          <button onClick={() => onComplete(node)} style={{
-            marginTop: 'auto', padding: '16px', borderRadius: 12,
-            background: isBonus ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'var(--accent)',
-            border: 'none', color: '#fff', fontSize: 16, fontWeight: 700,
-            cursor: 'pointer', transition: 'opacity 0.2s',
-          }}>
-            {isBonus ? '⭐ Complete bonus level!' : '✓ Mark as complete'}
-          </button>
-        )}
-        {isDone && (
-          <div style={{
-            marginTop: 'auto', padding: '16px', borderRadius: 12,
-            background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)',
-            textAlign: 'center', color: '#10b981', fontWeight: 700, fontSize: 15,
-          }}>
-            ✓ Completed!
-          </div>
-        )}
-      </div>
-    </>
-  )
-}
-
-// ── Main page ──────────────────────────────────────────────────────────────────
+/* ── Main ─────────────────────────────────────────────────────────────────────*/
 export default function RoadmapPage({ data, onBack }) {
-  const [nodes, setNodes]           = useState(() =>
-    (data?.nodes || []).map((n, i) => ({
-      ...n,
-      status: i === 0 ? 'active' : (n.status || 'locked'),
-    }))
-  )
-  const [selectedNode, setSelectedNode] = useState(null)
-  const [streak, setStreak]             = useState(7)
-  const [confetti, setConfetti]         = useState(null)
-  const [xpFloat, setXpFloat]           = useState(null)
-  const [earnedXP, setEarnedXP]         = useState(0)
-  const totalXP = data?.total_xp || nodes.reduce((s, n) => s + (n.xp_reward || 100), 0)
+  const [selected,  setSelected]  = useState(null)
+  const [completed, setCompleted] = useState(new Set())
+  const [earnedXP,  setEarnedXP]  = useState(0)
+  const [confetti,  setConfetti]  = useState(null)
+  const [xpFloat,   setXpFloat]   = useState(null)
+  const [streak,    setStreak]    = useState(7)
 
-  // Connector path between two nodes (zigzag layout)
-  const nodePositions = useRef([])
+  const nodes = normalise(data)
+  const pos   = layoutNodes(nodes)
+
+  const getState = useCallback((node) => {
+    if (completed.has(node.id)) return 'done'
+    const deps    = node.dependencies || []
+    const allDone = deps.every(d => completed.has(d))
+    if (!allDone) return 'locked'
+    if (node.type === 'bonus') {
+      const allMainDone = nodes.filter(n => n.type !== 'bonus').every(n => completed.has(n.id))
+      return allMainDone ? 'active' : 'locked'
+    }
+    const firstUnlocked = nodes.filter(n => n.type !== 'bonus')
+      .find(n => !completed.has(n.id) && (n.dependencies || []).every(d => completed.has(d)))
+    return node.id === firstUnlocked?.id ? 'active' : 'locked'
+  }, [completed, nodes])
+
+  const getStateFixed = useCallback((node) => {
+    if (completed.size === 0) {
+      const firstMain = nodes.find(n => n.type !== 'bonus')
+      return node.id === firstMain?.id ? 'active' : 'locked'
+    }
+    return getState(node)
+  }, [completed, nodes, getState])
 
   const handleComplete = (node) => {
-    const idx = nodes.findIndex(n => n.id === node.id)
-    if (idx === -1) return
-
-    const updated = [...nodes]
-    updated[idx] = { ...updated[idx], status: 'done' }
-
-    // Unlock next main node
-    const nextMain = updated.slice(idx + 1).find(n => n.type === 'main' && n.status === 'locked')
-    if (nextMain) nextMain.status = 'active'
-
-    // Unlock bonus if all main nodes done
-    const allMainDone = updated.filter(n => n.type === 'main').every(n => n.status === 'done')
-    if (allMainDone) {
-      const bonusNode = updated.find(n => n.type === 'bonus')
-      if (bonusNode && bonusNode.status === 'locked') bonusNode.status = 'active'
-    }
-
-    setNodes(updated)
+    const next = new Set(completed)
+    next.add(node.id)
+    setCompleted(next)
     setEarnedXP(p => p + (node.xp_reward || 100))
     setStreak(s => s + 1)
-    setSelectedNode(null)
-
-    // Confetti + XP float
+    setSelected(null)
     setConfetti({ x: window.innerWidth / 2, y: window.innerHeight / 2, key: Date.now() })
     setXpFloat({ xp: node.xp_reward || 100, key: Date.now() })
   }
 
-  const mainNodes  = nodes.filter(n => n.type === 'main')
-  const bonusNode  = nodes.find(n => n.type === 'bonus')
-  const doneCount  = nodes.filter(n => n.status === 'done').length
-  const totalCount = nodes.length
+  const allPos    = Object.values(pos)
+  const svgW      = Math.max(...allPos.map(p => p.x), 0) + 100
+  const svgH      = Math.max(...allPos.map(p => p.y), 0) + 120
+  const mainNodes = nodes.filter(n => n.type !== 'bonus')
+  const doneCount = mainNodes.filter(n => completed.has(n.id)).length
+  const progress  = mainNodes.length > 0 ? Math.round((doneCount / mainNodes.length) * 100) : 0
+  const totalXP   = data.total_xp || nodes.reduce((s, n) => s + (n.xp_reward || 100), 0)
+
+  const connections = []
+  nodes.forEach(n => {
+    ;(n.dependencies || []).forEach(did => {
+      const f = pos[did], t = pos[n.id]
+      if (f && t) connections.push({ key: `${did}-${n.id}`, x1: f.x, y1: f.y, x2: t.x, y2: t.y, isBonus: n.type === 'bonus' })
+    })
+  })
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font-body)' }}>
-      {/* Animations */}
+    <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
       <style>{`
-        @keyframes pulse-ring {
-          0%   { transform: scale(1); opacity: 0.8; }
-          100% { transform: scale(1.5); opacity: 0; }
-        }
-        @keyframes confetti-fly {
-          0%   { transform: translate(0,0) rotate(0deg); opacity: 1; }
-          100% { transform: translate(
-                   calc(cos(var(--angle)) * var(--dist)),
-                   calc(sin(var(--angle)) * var(--dist))
-                 ) rotate(540deg); opacity: 0; }
-        }
-        @keyframes xp-float {
-          0%   { transform: translateY(0);   opacity: 1; }
-          100% { transform: translateY(-60px); opacity: 0; }
-        }
-        @keyframes fade-in {
-          from { opacity: 0; } to { opacity: 1; }
-        }
-        @keyframes slide-in-right {
-          from { transform: translateX(100%); } to { transform: translateX(0); }
-        }
-        @keyframes node-unlock {
-          0%   { transform: scale(0.7); opacity: 0; }
-          70%  { transform: scale(1.1); }
-          100% { transform: scale(1);   opacity: 1; }
-        }
+        @keyframes pulse-ring  { 0%{transform:scale(1);opacity:.8} 100%{transform:scale(1.5);opacity:0} }
+        @keyframes confetti-pop{ 0%{transform:translate(0,0) rotate(0deg);opacity:1} 100%{transform:translate(calc(cos(var(--deg))*var(--d)),calc(sin(var(--deg))*var(--d))) rotate(540deg);opacity:0} }
+        @keyframes xp-up       { 0%{transform:translateY(0);opacity:1} 100%{transform:translateY(-60px);opacity:0} }
       `}</style>
 
       <Navbar onBack={onBack} showBack />
+      {confetti && <Confetti key={confetti.key} x={confetti.x} y={confetti.y} onDone={() => setConfetti(null)} />}
+      {xpFloat  && <XPFloat  key={xpFloat.key}  xp={xpFloat.xp}               onDone={() => setXpFloat(null)}  />}
 
-      {/* Confetti */}
-      {confetti && (
-        <ConfettiBurst key={confetti.key} x={confetti.x} y={confetti.y} onDone={() => setConfetti(null)} />
-      )}
-      {xpFloat && (
-        <XPFloat key={xpFloat.key} xp={xpFloat.xp} onDone={() => setXpFloat(null)} />
-      )}
-
-      {/* Header strip */}
-      <div style={{
-        position: 'fixed', top: 60, left: 0, right: 0, zIndex: 50,
-        padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'rgba(10,10,10,0.9)', backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-        flexWrap: 'wrap', gap: 10,
-      }}>
-        <div>
-          <h1 style={{ fontSize: 'clamp(13px,2vw,15px)', fontWeight: 700, margin: 0 }}>{data?.title || 'Your Roadmap'}</h1>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>
-            {doneCount}/{totalCount} nodes · personalized journey
-          </p>
+      {/* Info bar */}
+      <div style={{ position: 'fixed', top: '60px', left: 0, right: selected ? '310px' : 0, zIndex: 40, background: 'rgba(10,10,10,0.9)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '20px', transition: 'right 0.3s var(--ease)' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '0.9375rem' }}>{data.title || 'Your Roadmap'}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--ts)' }}>{doneCount}/{nodes.length} nodes · personalized journey</div>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <XPBar earned={earnedXP} total={totalXP} />
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20,
-            background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)',
-          }}>
-            <span style={{ fontSize: 16 }}>🔥</span>
-            <span style={{ fontWeight: 700, fontSize: 14, color: '#fbbf24' }}>{streak} day streak</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: '1.3rem', color: 'var(--r4)', letterSpacing: '-0.03em' }}>{progress}%</div>
+            <div style={{ fontSize: '0.68rem', color: 'var(--tm)' }}>{doneCount}/{mainNodes.length} nodes</div>
+          </div>
+          <div style={{ width: '88px' }}>
+            <div className="progress-bar"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: '1rem', color: '#f59e0b' }}>
+              {earnedXP}<span style={{ fontSize: '0.65rem', fontWeight: 400, marginLeft: '3px' }}>/ {totalXP} XP</span>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Legend */}
-      <div style={{
-        position: 'fixed', bottom: 20, left: 16, zIndex: 50,
-        display: 'flex', gap: 14, padding: '8px 14px', borderRadius: 20,
-        background: 'rgba(10,10,10,0.85)', border: '1px solid rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(8px)',
-      }}>
-        {[
-          { color: 'var(--accent)', label: 'Active' },
-          { color: '#10b981', label: 'Done' },
-          { color: 'rgba(255,255,255,0.2)', label: 'Locked' },
-          { color: '#fbbf24', label: 'Bonus' },
-        ].map(l => (
-          <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: l.color }} />
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{l.label}</span>
-          </div>
-        ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'rgba(229,41,41,0.08)', border: '1px solid rgba(229,41,41,0.16)', borderRadius: '100px' }}>
+          <span style={{ fontSize: '15px' }}>🔥</span>
+          <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '0.8rem', color: 'var(--r3)' }}>{streak} day streak</span>
+        </div>
       </div>
 
       {/* Map canvas */}
-      <div style={{ paddingTop: 130, paddingBottom: 80 }}>
-        <div style={{ maxWidth: 380, margin: '0 auto', position: 'relative', padding: '0 24px' }}>
-
-          {/* SVG connector lines */}
-          <svg style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible',
-          }}>
-            {mainNodes.map((node, i) => {
-              if (i === 0) return null
-              // Zigzag: even indices left, odd right — connect between them
-              const fromX = i % 2 === 0 ? '70%' : '30%'
-              const toX   = i % 2 === 0 ? '30%' : '70%'
-              const yUnit = 140
-              const fromY = (i - 1) * yUnit + 86
-              const toY   = i * yUnit + 20
-
-              const isDoneFrom = mainNodes[i - 1]?.status === 'done'
-              return (
-                <path key={node.id}
-                  d={`M ${fromX} ${fromY} C ${fromX} ${(fromY + toY) / 2}, ${toX} ${(fromY + toY) / 2}, ${toX} ${toY}`}
-                  fill="none"
-                  stroke={isDoneFrom ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.08)'}
-                  strokeWidth={isDoneFrom ? 2 : 1.5}
-                  strokeDasharray={isDoneFrom ? 'none' : '5 5'}
-                />
-              )
-            })}
-          </svg>
-
-          {/* Nodes in zigzag */}
-          {mainNodes.map((node, i) => {
-            const isLeft = i % 2 === 0
-            return (
-              <div key={node.id} style={{
-                display: 'flex',
-                justifyContent: isLeft ? 'flex-start' : 'flex-end',
-                marginBottom: 54,
-                paddingLeft: isLeft ? 0 : '40%',
-                paddingRight: isLeft ? '40%' : 0,
-              }}>
-                <RoadmapNode
-                  node={node} index={i} total={mainNodes.length}
-                  isLeft={isLeft}
-                  onClick={setSelectedNode}
-                />
-              </div>
-            )
+      <div style={{ paddingTop: '120px', paddingBottom: '60px', paddingRight: selected ? '310px' : 0, display: 'flex', justifyContent: 'center', minHeight: '100vh', transition: 'padding-right 0.3s var(--ease)', position: 'relative' }}>
+        <div style={{ position: 'fixed', top: '50%', left: selected ? 'calc(50% - 155px)' : '50%', transform: 'translate(-50%,-50%)', width: '500px', height: '500px', background: 'radial-gradient(circle,rgba(229,41,41,0.045) 0%,transparent 65%)', pointerEvents: 'none', transition: 'left 0.3s var(--ease)' }} />
+        <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ overflow: 'visible' }}>
+          {nodes.some(n => n.type === 'bonus') && (
+            <text x={svgW - 10} y="46" textAnchor="end" style={{ fontFamily: "'Syne',sans-serif", fontSize: '9px', fill: 'rgba(202,154,4,0.38)', letterSpacing: '0.1em', userSelect: 'none' }}>★ BONUS PATH</text>
+          )}
+          {connections.map((c, i) => (
+            <line key={c.key} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2}
+              stroke={c.isBonus ? 'rgba(202,154,4,0.2)' : 'rgba(229,41,41,0.14)'}
+              strokeWidth={c.isBonus ? 1.5 : 2} strokeDasharray={c.isBonus ? '5 4' : '7 5'}
+              style={{ animation: `pathDraw 1s ease forwards ${i * 0.05}s`, strokeDashoffset: 900 }}
+            />
+          ))}
+          {nodes.map((n, i) => {
+            const p = pos[n.id]
+            if (!p) return null
+            return <MapNode key={n.id} node={n} pos={p} state={getStateFixed(n)} isSelected={selected?.id === n.id} onClick={setSelected} idx={i} />
           })}
-
-          {/* Bonus node — always right-branched */}
-          {bonusNode && (
-            <div style={{ position: 'relative', marginTop: 16 }}>
-              {/* Dashed connector to bonus */}
-              <div style={{
-                position: 'absolute', top: -30, right: '18%',
-                fontSize: 11, color: '#fbbf24', letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-              }}>
-                ✦ bonus path
-              </div>
-              <svg style={{
-                position: 'absolute', top: -24, right: 0, left: 0,
-                height: 24, pointerEvents: 'none',
-              }}>
-                <path d="M 50% 0 Q 80% 12 75% 24"
-                  fill="none" stroke="rgba(251,191,36,0.4)"
-                  strokeWidth="1.5" strokeDasharray="4 4" />
-              </svg>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <RoadmapNode
-                  node={bonusNode} index={0} total={1}
-                  isLeft={false}
-                  onClick={setSelectedNode}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* All-done celebration */}
-          {doneCount > 0 && doneCount === totalCount && (
-            <div style={{
-              marginTop: 40, padding: '24px', borderRadius: 16, textAlign: 'center',
-              background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
-              animation: 'node-unlock 0.5s ease',
-            }}>
-              <div style={{ fontSize: 40, marginBottom: 8 }}>🏆</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, marginBottom: 6 }}>
-                Roadmap complete!
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>
-                You earned {totalXP} XP and a {streak}-day streak.
-              </div>
-            </div>
-          )}
-        </div>
+        </svg>
       </div>
 
-      {/* Side panel */}
-      <NodePanel
-        node={selectedNode}
-        onClose={() => setSelectedNode(null)}
-        onComplete={handleComplete}
-      />
+      {selected && <NodePanel node={selected} state={getStateFixed(selected)} onClose={() => setSelected(null)} onComplete={handleComplete} />}
+
+      {/* Legend */}
+      <div style={{ position: 'fixed', bottom: '20px', left: '20px', background: 'rgba(17,17,17,0.92)', backdropFilter: 'blur(10px)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px 14px', display: 'flex', gap: '14px', fontSize: '0.7rem', color: 'var(--ts)', zIndex: 30 }}>
+        {[['#e52929', 'Active'], ['#3a3a3a', 'Done'], ['#2a2a2a', 'Locked'], ['#ca9a04', 'Bonus']].map(([c, l]) => (
+          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.1)' }} />{l}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
