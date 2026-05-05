@@ -18,7 +18,7 @@ from backend.rag.roadmap_chain import generate_roadmap
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Roadmapify API", version="1.0.0")
+app = FastAPI(title="Roadmapify API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,36 +36,59 @@ app.add_middleware(
 
 class GenerateRoadmapRequest(BaseModel):
     goal: str = Field(..., min_length=1)
-    difficulty: str = Field(default="beginner")
-    time_commitment: str = Field(default="3 months")
+    experience: str = Field(default="beginner")   # replaces difficulty
+    timeframe: str = Field(default="1_month")     # replaces time_commitment
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "2.0.0"}
 
 
 @app.post("/generate-roadmap")
 def generate_roadmap_endpoint(req: GenerateRoadmapRequest):
     try:
-        result = generate_roadmap(req.goal, req.difficulty, req.time_commitment)
-        return {"goal": req.goal, "status": "success", "roadmap": result}
+        result = generate_roadmap(
+            goal=req.goal,
+            timeframe=req.timeframe,
+            experience=req.experience,
+        )
+        return result  # roadmap_chain now returns the full structured dict directly
     except Exception as e:
         logger.error(f"Pipeline error: {e}")
         return {
-            "goal": req.goal,
-            "status": "error",
-            "message": str(e),
-            "roadmap": {
-                "title": f"Roadmap for: {req.goal}",
-                "stages": [
-                    {
-                        "stage_number": 1,
-                        "title": "Getting Started",
-                        "duration_weeks": 2,
-                        "topics": ["Fundamentals", "Setup & Tools"],
-                        "resources": ["Search for beginner resources on this topic"],
-                    }
-                ],
-            },
+            "title": f"Roadmap for: {req.goal}",
+            "goal_type": "skill",
+            "total_xp": 300,
+            "timeframe_options": [
+                {"label": "2 weeks", "sublabel": "Sprint", "value": "2_weeks"},
+                {"label": "1 month", "sublabel": "Steady", "value": "1_month"},
+                {"label": "3 months", "sublabel": "Deep dive", "value": "3_months"},
+            ],
+            "nodes": [
+                {
+                    "id": "node_1",
+                    "title": "Get started",
+                    "description": "Begin your journey with the basics.",
+                    "duration_label": "Day 1",
+                    "status": "active",
+                    "type": "main",
+                    "xp_reward": 100,
+                    "emoji": "🚀",
+                    "resources": [
+                        {"label": "Search for beginner guides", "url": "", "tip": "Start with YouTube or Google"}
+                    ],
+                },
+                {
+                    "id": "bonus_1",
+                    "title": "Challenge yourself",
+                    "description": "Try something more advanced once you're comfortable.",
+                    "duration_label": "Whenever you're ready",
+                    "status": "locked",
+                    "type": "bonus",
+                    "xp_reward": 250,
+                    "emoji": "⭐",
+                    "resources": [],
+                },
+            ],
         }
