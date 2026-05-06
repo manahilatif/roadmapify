@@ -1,360 +1,377 @@
-import { useState, useCallback } from 'react'
-import Navbar from '../components/Navbar.jsx'
+import { useState, useCallback } from "react";
+import ChatButton from "../components/ChatButton";
 
-/* ── Normalise both old (stages) and new (nodes) backend shapes ──────────────*/
-function normalise(data) {
-  if (data.nodes && Array.isArray(data.nodes)) {
-    return data.nodes.map((n, i) => ({
-      id:             n.id || `n${i}`,
-      label:          n.title || n.label || `Step ${i + 1}`,
-      type:           n.type || 'main',
-      week:           n.duration_label || n.week || `Week ${i + 1}`,
-      xp_reward:      n.xp_reward || 100,
-      description:    n.description || '',
-      emoji:          n.emoji || '',
-      resources:      n.resources || [],
-      topics:         n.topics || [],
-      dependencies:   i === 0 ? [] : [data.nodes[i - 1]?.id || `n${i - 1}`],
-      status:         n.status || (i === 0 ? 'active' : 'locked'),
-    }))
-  }
-  if (data.stages && Array.isArray(data.stages)) {
-    return data.stages.map((s, i) => ({
-      id:           s.id || `s${i}`,
-      label:        s.title || s.name || `Stage ${i + 1}`,
-      type:         s.type || 'main',
-      week:         s.week_start || s.week || i + 1,
-      xp_reward:    100,
-      description:  '',
-      emoji:        '',
-      resources:    s.resources || [],
-      topics:       s.topics || [],
-      dependencies: i === 0 ? [] : [data.stages[i - 1]?.id || `s${i - 1}`],
-      status:       i === 0 ? 'active' : 'locked',
-    }))
-  }
-  return []
-}
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-function layoutNodes(nodes) {
-  const main  = nodes.filter(n => n.type !== 'bonus')
-  const bonus = nodes.filter(n => n.type === 'bonus')
-  const pos   = {}
-  const CX = 185, AMP = 78, RH = 92
-  main.forEach((n, i)  => { pos[n.id] = { x: CX + Math.sin(i * 1.15) * AMP, y: 64 + i * RH } })
-  bonus.forEach((n, i) => {
-    const pid = n.dependencies?.[0]
-    const p   = pid && pos[pid] ? pos[pid] : { x: CX, y: 64 }
-    pos[n.id] = { x: p.x + 115 + (i % 2) * 14, y: p.y + (i % 2 === 0 ? -24 : 40) }
-  })
-  return pos
-}
+const TYPE_ICONS = {
+  video: "▶",
+  article: "📄",
+  documentation: "📚",
+  book: "📖",
+  platform: "🖥",
+};
 
-/* ── Confetti ─────────────────────────────────────────────────────────────────*/
-function Confetti({ x, y, onDone }) {
-  const colors = ['#e52929', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6']
-  const pieces = Array.from({ length: 16 }, (_, i) => ({
-    id: i, color: colors[i % colors.length],
-    angle: (i / 16) * 360, dist: 40 + Math.random() * 50,
-  }))
-  useState(() => { const t = setTimeout(onDone, 1000); return () => clearTimeout(t) })
-  return (
-    <div style={{ position: 'fixed', left: x, top: y, pointerEvents: 'none', zIndex: 999 }}>
-      {pieces.map(p => (
-        <div key={p.id} style={{
-          position: 'absolute', width: 6, height: 6, borderRadius: '50%',
-          background: p.color, animation: 'confetti-pop 0.9s ease-out forwards',
-          '--deg': `${p.angle}deg`, '--d': `${p.dist}px`,
-        }} />
-      ))}
-    </div>
-  )
-}
+const TYPE_COLORS = {
+  video: "#ef4444",
+  article: "#3b82f6",
+  documentation: "#10b981",
+  book: "#8b5cf6",
+  platform: "#f59e0b",
+};
 
-function XPFloat({ xp, onDone }) {
-  useState(() => { const t = setTimeout(onDone, 1200); return () => clearTimeout(t) })
-  return (
-    <div style={{
-      position: 'fixed', bottom: 100, right: 340, zIndex: 999,
-      fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: '1.4rem',
-      color: '#f59e0b', animation: 'xp-up 1.2s ease-out forwards', pointerEvents: 'none',
-    }}>
-      +{xp} XP ⚡
-    </div>
-  )
-}
+export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
+  const [roadmap, setRoadmap] = useState(initialRoadmap);
+  const [activeModuleId, setActiveModuleId] = useState(null);
+  const [activeResource, setActiveResource] = useState(null);
+  const [completedModules, setCompletedModules] = useState(new Set());
+  const [updating, setUpdating] = useState(false);
+  const [showUpdatePanel, setShowUpdatePanel] = useState(false);
+  const [updateType, setUpdateType] = useState("pace");
+  const [updateValue, setUpdateValue] = useState("");
+  const [newHours, setNewHours] = useState(roadmap?.timeline?.hoursPerWeek || 10);
+  const [saveStatus, setSaveStatus] = useState("");
 
-/* ── Map node ─────────────────────────────────────────────────────────────────*/
-function MapNode({ node, pos, state, isSelected, onClick, idx }) {
-  const isBonus  = node.type === 'bonus'
-  const isDone   = state === 'done'
-  const isActive = state === 'active'
-  const isLocked = state === 'locked'
-  const r = isBonus ? 24 : 30
+  const modules = roadmap?.modules || [];
+  const milestones = roadmap?.milestones || [];
+  const activeModule = modules.find((m) => m.id === activeModuleId) || modules[0] || null;
 
-  return (
-    <g style={{ cursor: isLocked ? 'not-allowed' : 'pointer', animation: `fadeUp 0.4s var(--ease) both ${0.04 + idx * 0.055}s`, opacity: 0 }}
-      onClick={() => !isLocked && onClick(node)}>
-      {isActive && <>
-        <circle cx={pos.x} cy={pos.y} r={r + 13} fill="none" stroke="rgba(229,41,41,0.32)" strokeWidth="1.5" style={{ animation: 'pulse-ring 2s ease-out infinite' }} />
-        <circle cx={pos.x} cy={pos.y} r={r + 22} fill="none" stroke="rgba(229,41,41,0.12)" strokeWidth="1"   style={{ animation: 'pulse-ring 2s ease-out 0.5s infinite' }} />
-      </>}
-      {isSelected && !isActive && (
-        <circle cx={pos.x} cy={pos.y} r={r + 9} fill="none" stroke="rgba(229,41,41,0.4)" strokeWidth="2" strokeDasharray="4 3" />
-      )}
-      <circle cx={pos.x} cy={pos.y} r={r}
-        fill={isDone ? '#1c1c1c' : isActive ? '#e52929' : isBonus ? '#1e1800' : '#181818'}
-        stroke={isSelected ? '#e52929' : isDone ? '#3a3a3a' : isActive ? '#e52929' : isBonus ? '#ca9a04' : '#2a2a2a'}
-        strokeWidth={isActive || isSelected ? 2.5 : 1.5}
-        style={isActive ? { filter: 'drop-shadow(0 0 13px rgba(229,41,41,0.55))' } : {}}
-      />
-      <text x={pos.x} y={pos.y + 6} textAnchor="middle" style={{ fontSize: isActive ? '11px' : '15px', fontFamily: "'Syne',sans-serif", fontWeight: 800, fill: isDone ? '#444' : isActive ? '#fff' : isBonus ? '#ca9a04' : '#333', userSelect: 'none', pointerEvents: 'none' }}>
-        {isDone ? '✓' : isActive ? (node.emoji || 'NOW') : isBonus ? '★' : '🔒'}
-      </text>
-      <text x={pos.x} y={pos.y + r + 17} textAnchor="middle" style={{ fontFamily: "'DM Sans',sans-serif", fontSize: '11.5px', fill: isLocked ? '#3a3a3a' : isBonus ? '#ca9a04' : isActive ? '#f87171' : '#5a5a5a', fontWeight: isActive ? 600 : 400, userSelect: 'none', pointerEvents: 'none' }}>
-        {node.label}
-      </text>
-      <text x={pos.x} y={pos.y - r - 7} textAnchor="middle" style={{ fontFamily: "'Syne',sans-serif", fontSize: '9px', fill: 'rgba(255,255,255,0.11)', userSelect: 'none', pointerEvents: 'none', letterSpacing: '0.06em' }}>
-        {typeof node.week === 'number' ? `WK ${node.week}` : node.week}
-      </text>
-    </g>
-  )
-}
+  const progressPct = modules.length
+    ? Math.round((completedModules.size / modules.length) * 100)
+    : 0;
 
-/* ── Sidebar ──────────────────────────────────────────────────────────────────*/
-function NodePanel({ node, state, onClose, onComplete }) {
-  const isBonus = node.type === 'bonus'
-  const isDone  = state === 'done'
-  const icons   = ['📹', '📄', '🎓']
+  // ── Toggle module complete ──────────────────────────────────────────────
+  const toggleComplete = async (moduleId) => {
+    const next = new Set(completedModules);
+    const wasCompleted = next.has(moduleId);
+    wasCompleted ? next.delete(moduleId) : next.add(moduleId);
+    setCompletedModules(next);
+    setSaveStatus("Saved ✓");
+    setTimeout(() => setSaveStatus(""), 2000);
 
-  // Handle both string[] (old) and {label,url,tip}[] (new) resource formats
-  const resources = (Array.isArray(node.resources) ? node.resources : []).map(r =>
-    typeof r === 'string' ? { label: r, url: '', tip: '' } : r
-  )
+    // Persist to backend
+    try {
+      await fetch(`${API_URL}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roadmap_id: roadmap.goal?.slice(0, 20) || "roadmap",
+          module_id: moduleId,
+          completed: !wasCompleted,
+        }),
+      });
+    } catch (_) { /* non-fatal */ }
+  };
+
+  // ── Dynamic roadmap update ──────────────────────────────────────────────
+  const handleUpdate = async () => {
+    setUpdating(true);
+    try {
+      const res = await fetch(`${API_URL}/update-roadmap`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          original_roadmap: roadmap,
+          change_type: updateType,
+          new_value: updateValue,
+          hours_per_week: updateType === "pace" ? newHours : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRoadmap(data.roadmap);
+        setShowUpdatePanel(false);
+        setActiveModuleId(null);
+      }
+    } catch (e) {
+      console.error("Update failed:", e);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // ── Open resource safely ─────────────────────────────────────────────────
+  const openResource = useCallback((url, resource) => {
+    setActiveResource(resource);
+    if (url && url.startsWith("http")) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }, []);
 
   return (
-    <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: '310px', background: 'var(--s0)', borderLeft: '1px solid var(--border)', padding: '24px 20px', overflowY: 'auto', zIndex: 50, animation: 'fadeUp 0.22s var(--ease)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ paddingTop: '68px' }}>
-        <div className={`badge ${isBonus ? 'badge-gold' : 'badge-red'}`} style={{ marginBottom: '10px' }}>
-          {isBonus ? '★ Bonus quest' : 'Main path'}
+    <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#fff", fontFamily: "'DM Sans', sans-serif" }}>
+
+      {/* ── Top bar ── */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 100,
+        background: "rgba(10,10,10,0.95)", backdropFilter: "blur(12px)",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        padding: "0 24px", display: "flex", alignItems: "center", gap: "16px", height: "60px",
+      }}>
+        <button onClick={onBack} style={{ background: "none", border: "1px solid rgba(255,255,255,0.15)", color: "#aaa", padding: "6px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}>
+          ← Back
+        </button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: "14px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {roadmap?.goal || "Your Roadmap"}
+          </div>
+          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)" }}>
+            {roadmap?.domain} · {roadmap?.totalWeeks} weeks · {roadmap?.timeline?.hoursPerWeek}h/week
+          </div>
         </div>
-        <h3 style={{ fontSize: '1.3rem', letterSpacing: '-0.02em' }}>
-          {node.emoji ? `${node.emoji} ` : ''}{node.label}
-        </h3>
+
+        {/* Progress bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ width: "120px", height: "6px", background: "rgba(255,255,255,0.1)", borderRadius: "3px", overflow: "hidden" }}>
+            <div style={{ width: `${progressPct}%`, height: "100%", background: "#dc2626", borderRadius: "3px", transition: "width 0.4s ease" }} />
+          </div>
+          <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>{progressPct}%</span>
+        </div>
+
+        {saveStatus && <span style={{ fontSize: "12px", color: "#10b981" }}>{saveStatus}</span>}
+
+        <button
+          onClick={() => setShowUpdatePanel(!showUpdatePanel)}
+          style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", color: "#dc2626", padding: "6px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}
+        >
+          ✏ Update
+        </button>
       </div>
 
-      <button onClick={onClose} style={{ position: 'absolute', top: '76px', right: '16px', background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: '8px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--ts)', fontSize: '16px' }}>×</button>
-
-      {/* Meta */}
-      <div style={{ background: 'var(--s1)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-        <div>
-          <div style={{ fontSize: '0.68rem', color: 'var(--tm)', marginBottom: '3px' }}>Duration</div>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '1rem' }}>{node.week}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: '0.68rem', color: 'var(--tm)', marginBottom: '3px' }}>XP reward</div>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '1rem', color: '#f59e0b' }}>⚡ {node.xp_reward}</div>
-        </div>
-        <div style={{ gridColumn: '1/-1' }}>
-          <div style={{ fontSize: '0.68rem', color: 'var(--tm)', marginBottom: '5px' }}>Status</div>
-          <span className={`badge ${state === 'active' ? 'badge-red' : 'badge-gray'}`}>
-            {isDone ? '✓ Completed' : state === 'active' ? '▶ In progress' : '🔒 Locked'}
-          </span>
-        </div>
-      </div>
-
-      {/* Description (new format) */}
-      {node.description && (
-        <div>
-          <div style={{ fontSize: '0.65rem', fontFamily: "'Syne',sans-serif", fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--tm)', marginBottom: '9px' }}>What to do</div>
-          <p style={{ fontSize: '0.875rem', color: 'var(--ts)', lineHeight: 1.6, margin: 0 }}>{node.description}</p>
+      {/* ── Update panel ── */}
+      {showUpdatePanel && (
+        <div style={{
+          background: "rgba(220,38,38,0.05)", borderBottom: "1px solid rgba(220,38,38,0.15)",
+          padding: "16px 24px", display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap",
+        }}>
+          <div>
+            <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", display: "block", marginBottom: "4px" }}>Update type</label>
+            <select value={updateType} onChange={e => setUpdateType(e.target.value)}
+              style={{ background: "#111", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", padding: "8px 12px", borderRadius: "8px", fontSize: "13px" }}>
+              <option value="pace">Change pace (hours/week)</option>
+              <option value="difficulty">Change difficulty</option>
+              <option value="add_module">Add a topic</option>
+              <option value="goal">Change goal</option>
+            </select>
+          </div>
+          {updateType === "pace" && (
+            <div>
+              <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", display: "block", marginBottom: "4px" }}>Hours/week</label>
+              <input type="number" value={newHours} onChange={e => setNewHours(+e.target.value)} min={1} max={40}
+                style={{ background: "#111", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", padding: "8px 12px", borderRadius: "8px", fontSize: "13px", width: "80px" }} />
+            </div>
+          )}
+          {updateType !== "pace" && (
+            <div>
+              <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", display: "block", marginBottom: "4px" }}>
+                {updateType === "difficulty" ? "Level (beginner/intermediate/advanced)" : updateType === "add_module" ? "Topic to add" : "New goal"}
+              </label>
+              <input value={updateValue} onChange={e => setUpdateValue(e.target.value)} placeholder="Type here..."
+                style={{ background: "#111", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", padding: "8px 12px", borderRadius: "8px", fontSize: "13px", width: "240px" }} />
+            </div>
+          )}
+          <button onClick={handleUpdate} disabled={updating}
+            style={{ background: updating ? "rgba(220,38,38,0.3)" : "#dc2626", border: "none", color: "#fff", padding: "9px 20px", borderRadius: "8px", cursor: updating ? "not-allowed" : "pointer", fontSize: "13px", fontWeight: 600 }}>
+            {updating ? "Updating..." : "Apply"}
+          </button>
         </div>
       )}
 
-      {/* Topics (old format) */}
-      {node.topics && node.topics.length > 0 && (
-        <div>
-          <div style={{ fontSize: '0.65rem', fontFamily: "'Syne',sans-serif", fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--tm)', marginBottom: '9px' }}>Topics covered</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            {node.topics.map((t, i) => (
-              <span key={i} style={{ background: 'var(--s2)', border: '1px solid var(--border-md)', borderRadius: '6px', padding: '4px 10px', fontSize: '0.78rem', color: 'var(--ts)' }}>{t}</span>
-            ))}
+      {/* ── Architecture note ── */}
+      {roadmap?.architecture?.recommended && (
+        <div style={{ margin: "20px 24px 0", padding: "14px 18px", background: "rgba(220,38,38,0.05)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: "12px", display: "flex", gap: "12px", alignItems: "flex-start" }}>
+          <span style={{ fontSize: "18px" }}>🏗</span>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "#dc2626" }}>Recommended Architecture: {roadmap.architecture.recommended}</div>
+            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "4px" }}>{roadmap.architecture.reason}</div>
           </div>
         </div>
       )}
 
-      {/* Resources — links work, tips shown, icons preserved */}
-      {resources.length > 0 && (
-        <div>
-          <div style={{ fontSize: '0.65rem', fontFamily: "'Syne',sans-serif", fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--tm)', marginBottom: '9px' }}>Curated resources</div>
-          {resources.map((r, i) => {
-            const hasLink = r.url && r.url.trim() !== ''
-            const card = (
-              <div style={{ background: 'var(--s1)', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: '9px', marginBottom: '6px', transition: 'border-color 0.15s', cursor: hasLink ? 'pointer' : 'default' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(229,41,41,0.28)'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+      {/* ── Milestones strip ── */}
+      {milestones.length > 0 && (
+        <div style={{ margin: "16px 24px", display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
+          {milestones.map((ms, i) => (
+            <div key={i} style={{
+              flexShrink: 0, padding: "8px 14px",
+              background: completedModules.size >= (modules.filter(m => m.week <= ms.week).length) ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${completedModules.size >= (modules.filter(m => m.week <= ms.week).length) ? "rgba(16,185,129,0.3)" : "rgba(255,255,255,0.1)"}`,
+              borderRadius: "8px",
+            }}>
+              <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)" }}>Week {ms.week}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: "#fff" }}>🏆 {ms.title}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Main content ── */}
+      <div style={{ display: "flex", gap: "0", minHeight: "calc(100vh - 60px)" }}>
+
+        {/* Module list */}
+        <div style={{ width: "320px", flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", padding: "16px 0" }}>
+          {modules.map((mod) => {
+            const done = completedModules.has(mod.id);
+            const active = activeModuleId === mod.id || (!activeModuleId && mod.id === modules[0]?.id);
+            return (
+              <div
+                key={mod.id}
+                onClick={() => setActiveModuleId(mod.id)}
+                style={{
+                  padding: "14px 20px", cursor: "pointer",
+                  background: active ? "rgba(220,38,38,0.08)" : "transparent",
+                  borderLeft: active ? "3px solid #dc2626" : "3px solid transparent",
+                  transition: "all 0.15s",
+                  display: "flex", alignItems: "flex-start", gap: "12px",
+                }}
               >
-                <div style={{ width: '26px', height: '26px', background: 'rgba(229,41,41,0.09)', border: '1px solid rgba(229,41,41,0.15)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', flexShrink: 0, marginTop: '1px' }}>{icons[i % 3]}</div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--tp)' }}>{r.label}</div>
-                  {r.tip && <div style={{ fontSize: '0.75rem', color: 'var(--tm)', marginTop: '2px' }}>{r.tip}</div>}
-                  {hasLink && <div style={{ fontSize: '0.72rem', color: 'var(--r4)', marginTop: '3px' }}>Open resource →</div>}
+                {/* Check circle */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleComplete(mod.id); }}
+                  style={{
+                    flexShrink: 0, width: "22px", height: "22px", borderRadius: "50%", marginTop: "1px",
+                    background: done ? "#dc2626" : "transparent",
+                    border: `2px solid ${done ? "#dc2626" : "rgba(255,255,255,0.2)"}`,
+                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#fff", fontSize: "11px",
+                  }}
+                >
+                  {done ? "✓" : ""}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "11px", color: done ? "#10b981" : "rgba(255,255,255,0.4)", marginBottom: "2px" }}>
+                    Week {mod.week} · {mod.estimatedHours}h
+                  </div>
+                  <div style={{ fontSize: "13px", fontWeight: active ? 600 : 400, color: done ? "#10b981" : "#fff", lineHeight: "1.4" }}>
+                    {mod.title}
+                  </div>
                 </div>
               </div>
-            )
-            return hasLink
-              ? <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'block' }}>{card}</a>
-              : <div key={i}>{card}</div>
+            );
           })}
         </div>
-      )}
 
-      {/* CTA */}
-      {state !== 'locked' && (
-        <div style={{ marginTop: 'auto' }}>
-          {isDone
-            ? <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', padding: '13px' }}>✓ Completed</button>
-            : <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px' }} onClick={() => onComplete(node)}>
-                {isBonus ? '⭐ Complete bonus level' : '✓ Mark as complete'}
-              </button>
-          }
-        </div>
-      )}
-    </div>
-  )
-}
+        {/* Module detail */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
+          {activeModule && (
+            <>
+              {/* Module header */}
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+                  <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700 }}>{activeModule.title}</h2>
+                  <button
+                    onClick={() => toggleComplete(activeModule.id)}
+                    style={{
+                      background: completedModules.has(activeModule.id) ? "rgba(16,185,129,0.15)" : "rgba(220,38,38,0.1)",
+                      border: `1px solid ${completedModules.has(activeModule.id) ? "rgba(16,185,129,0.3)" : "rgba(220,38,38,0.3)"}`,
+                      color: completedModules.has(activeModule.id) ? "#10b981" : "#dc2626",
+                      padding: "6px 14px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: 600,
+                    }}
+                  >
+                    {completedModules.has(activeModule.id) ? "✓ Completed" : "Mark Complete"}
+                  </button>
+                </div>
+                <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "14px", lineHeight: "1.6", margin: 0 }}>
+                  {activeModule.description}
+                </p>
+              </div>
 
-/* ── Main ─────────────────────────────────────────────────────────────────────*/
-export default function RoadmapPage({ data, onBack }) {
-  const [selected,  setSelected]  = useState(null)
-  const [completed, setCompleted] = useState(new Set())
-  const [earnedXP,  setEarnedXP]  = useState(0)
-  const [confetti,  setConfetti]  = useState(null)
-  const [xpFloat,   setXpFloat]   = useState(null)
-  const [streak,    setStreak]    = useState(7)
+              {/* Tasks */}
+              {activeModule.tasks?.length > 0 && (
+                <section style={{ marginBottom: "24px" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: 600, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Tasks</h3>
+                  <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {activeModule.tasks.map((task, i) => (
+                      <li key={i} style={{ display: "flex", gap: "10px", alignItems: "flex-start", fontSize: "14px", color: "rgba(255,255,255,0.8)" }}>
+                        <span style={{ color: "#dc2626", fontWeight: 700, flexShrink: 0, marginTop: "1px" }}>{i + 1}.</span>
+                        {task}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
 
-  const nodes = normalise(data)
-  const pos   = layoutNodes(nodes)
+              {/* Resources */}
+              {activeModule.resources?.length > 0 && (
+                <section style={{ marginBottom: "24px" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: 600, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Resources</h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {activeModule.resources.map((res, i) => (
+                      <div
+                        key={i}
+                        onClick={() => openResource(res.url, res)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: "12px",
+                          padding: "12px 16px",
+                          background: activeResource?.url === res.url ? "rgba(220,38,38,0.08)" : "rgba(255,255,255,0.03)",
+                          border: `1px solid ${activeResource?.url === res.url ? "rgba(220,38,38,0.3)" : "rgba(255,255,255,0.08)"}`,
+                          borderRadius: "10px", cursor: "pointer", transition: "all 0.15s",
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.06)"}
+                        onMouseLeave={e => e.currentTarget.style.background = activeResource?.url === res.url ? "rgba(220,38,38,0.08)" : "rgba(255,255,255,0.03)"}
+                      >
+                        <div style={{
+                          width: "32px", height: "32px", borderRadius: "8px", flexShrink: 0,
+                          background: `${TYPE_COLORS[res.type] || "#666"}20`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: "14px",
+                        }}>
+                          {TYPE_ICONS[res.type] || "🔗"}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "13px", fontWeight: 500, color: "#fff", marginBottom: "2px" }}>{res.title}</div>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <span style={{ fontSize: "11px", color: TYPE_COLORS[res.type] || "#aaa", textTransform: "uppercase", fontWeight: 600 }}>{res.type}</span>
+                            {res.duration && <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.35)" }}>· {res.duration}</span>}
+                            <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" }}>
+                              {res.url?.replace(/^https?:\/\//, "").split("/")[0]}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "16px" }}>↗</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
-  const getState = useCallback((node) => {
-    if (completed.has(node.id)) return 'done'
-    const deps    = node.dependencies || []
-    const allDone = deps.every(d => completed.has(d))
-    if (!allDone) return 'locked'
-    if (node.type === 'bonus') {
-      const allMainDone = nodes.filter(n => n.type !== 'bonus').every(n => completed.has(n.id))
-      return allMainDone ? 'active' : 'locked'
-    }
-    const firstUnlocked = nodes.filter(n => n.type !== 'bonus')
-      .find(n => !completed.has(n.id) && (n.dependencies || []).every(d => completed.has(d)))
-    return node.id === firstUnlocked?.id ? 'active' : 'locked'
-  }, [completed, nodes])
+              {/* Checkpoint */}
+              {activeModule.checkpoint && (
+                <section style={{
+                  background: "rgba(220,38,38,0.04)", border: "1px solid rgba(220,38,38,0.15)",
+                  borderRadius: "12px", padding: "18px 20px",
+                }}>
+                  <h3 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: 600, color: "#dc2626" }}>🏁 Checkpoint</h3>
 
-  const getStateFixed = useCallback((node) => {
-    if (completed.size === 0) {
-      const firstMain = nodes.find(n => n.type !== 'bonus')
-      return node.id === firstMain?.id ? 'active' : 'locked'
-    }
-    return getState(node)
-  }, [completed, nodes, getState])
+                  {activeModule.checkpoint.practiceQuestions?.length > 0 && (
+                    <>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.5)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Practice Questions</div>
+                      <ol style={{ margin: "0 0 16px", paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {activeModule.checkpoint.practiceQuestions.map((q, i) => (
+                          <li key={i} style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)", lineHeight: "1.5" }}>{q}</li>
+                        ))}
+                      </ol>
+                    </>
+                  )}
 
-  const handleComplete = (node) => {
-    const next = new Set(completed)
-    next.add(node.id)
-    setCompleted(next)
-    setEarnedXP(p => p + (node.xp_reward || 100))
-    setStreak(s => s + 1)
-    setSelected(null)
-    setConfetti({ x: window.innerWidth / 2, y: window.innerHeight / 2, key: Date.now() })
-    setXpFloat({ xp: node.xp_reward || 100, key: Date.now() })
-  }
-
-  const allPos    = Object.values(pos)
-  const svgW      = Math.max(...allPos.map(p => p.x), 0) + 100
-  const svgH      = Math.max(...allPos.map(p => p.y), 0) + 120
-  const mainNodes = nodes.filter(n => n.type !== 'bonus')
-  const doneCount = mainNodes.filter(n => completed.has(n.id)).length
-  const progress  = mainNodes.length > 0 ? Math.round((doneCount / mainNodes.length) * 100) : 0
-  const totalXP   = data.total_xp || nodes.reduce((s, n) => s + (n.xp_reward || 100), 0)
-
-  const connections = []
-  nodes.forEach(n => {
-    ;(n.dependencies || []).forEach(did => {
-      const f = pos[did], t = pos[n.id]
-      if (f && t) connections.push({ key: `${did}-${n.id}`, x1: f.x, y1: f.y, x2: t.x, y2: t.y, isBonus: n.type === 'bonus' })
-    })
-  })
-
-  return (
-    <div style={{ minHeight: '100vh', background: 'var(--black)' }}>
-      <style>{`
-        @keyframes pulse-ring  { 0%{transform:scale(1);opacity:.8} 100%{transform:scale(1.5);opacity:0} }
-        @keyframes confetti-pop{ 0%{transform:translate(0,0) rotate(0deg);opacity:1} 100%{transform:translate(calc(cos(var(--deg))*var(--d)),calc(sin(var(--deg))*var(--d))) rotate(540deg);opacity:0} }
-        @keyframes xp-up       { 0%{transform:translateY(0);opacity:1} 100%{transform:translateY(-60px);opacity:0} }
-      `}</style>
-
-      <Navbar onBack={onBack} showBack />
-      {confetti && <Confetti key={confetti.key} x={confetti.x} y={confetti.y} onDone={() => setConfetti(null)} />}
-      {xpFloat  && <XPFloat  key={xpFloat.key}  xp={xpFloat.xp}               onDone={() => setXpFloat(null)}  />}
-
-      {/* Info bar */}
-      <div style={{ position: 'fixed', top: '60px', left: 0, right: selected ? '310px' : 0, zIndex: 40, background: 'rgba(10,10,10,0.9)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '20px', transition: 'right 0.3s var(--ease)' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '0.9375rem' }}>{data.title || 'Your Roadmap'}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--ts)' }}>{doneCount}/{nodes.length} nodes · personalized journey</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: '1.3rem', color: 'var(--r4)', letterSpacing: '-0.03em' }}>{progress}%</div>
-            <div style={{ fontSize: '0.68rem', color: 'var(--tm)' }}>{doneCount}/{mainNodes.length} nodes</div>
-          </div>
-          <div style={{ width: '88px' }}>
-            <div className="progress-bar"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: '1rem', color: '#f59e0b' }}>
-              {earnedXP}<span style={{ fontSize: '0.65rem', fontWeight: 400, marginLeft: '3px' }}>/ {totalXP} XP</span>
-            </div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'rgba(229,41,41,0.08)', border: '1px solid rgba(229,41,41,0.16)', borderRadius: '100px' }}>
-          <span style={{ fontSize: '15px' }}>🔥</span>
-          <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '0.8rem', color: 'var(--r3)' }}>{streak} day streak</span>
-        </div>
-      </div>
-
-      {/* Map canvas */}
-      <div style={{ paddingTop: '120px', paddingBottom: '60px', paddingRight: selected ? '310px' : 0, display: 'flex', justifyContent: 'center', minHeight: '100vh', transition: 'padding-right 0.3s var(--ease)', position: 'relative' }}>
-        <div style={{ position: 'fixed', top: '50%', left: selected ? 'calc(50% - 155px)' : '50%', transform: 'translate(-50%,-50%)', width: '500px', height: '500px', background: 'radial-gradient(circle,rgba(229,41,41,0.045) 0%,transparent 65%)', pointerEvents: 'none', transition: 'left 0.3s var(--ease)' }} />
-        <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`} style={{ overflow: 'visible' }}>
-          {nodes.some(n => n.type === 'bonus') && (
-            <text x={svgW - 10} y="46" textAnchor="end" style={{ fontFamily: "'Syne',sans-serif", fontSize: '9px', fill: 'rgba(202,154,4,0.38)', letterSpacing: '0.1em', userSelect: 'none' }}>★ BONUS PATH</text>
+                  {activeModule.checkpoint.miniProject && (
+                    <>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.5)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Mini Project</div>
+                      <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.8)", lineHeight: "1.5" }}>🛠 {activeModule.checkpoint.miniProject}</div>
+                    </>
+                  )}
+                </section>
+              )}
+            </>
           )}
-          {connections.map((c, i) => (
-            <line key={c.key} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2}
-              stroke={c.isBonus ? 'rgba(202,154,4,0.2)' : 'rgba(229,41,41,0.14)'}
-              strokeWidth={c.isBonus ? 1.5 : 2} strokeDasharray={c.isBonus ? '5 4' : '7 5'}
-              style={{ animation: `pathDraw 1s ease forwards ${i * 0.05}s`, strokeDashoffset: 900 }}
-            />
-          ))}
-          {nodes.map((n, i) => {
-            const p = pos[n.id]
-            if (!p) return null
-            return <MapNode key={n.id} node={n} pos={p} state={getStateFixed(n)} isSelected={selected?.id === n.id} onClick={setSelected} idx={i} />
-          })}
-        </svg>
+        </div>
       </div>
 
-      {selected && <NodePanel node={selected} state={getStateFixed(selected)} onClose={() => setSelected(null)} onComplete={handleComplete} />}
-
-      {/* Legend */}
-      <div style={{ position: 'fixed', bottom: '20px', left: '20px', background: 'rgba(17,17,17,0.92)', backdropFilter: 'blur(10px)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px 14px', display: 'flex', gap: '14px', fontSize: '0.7rem', color: 'var(--ts)', zIndex: 30 }}>
-        {[['#e52929', 'Active'], ['#3a3a3a', 'Done'], ['#2a2a2a', 'Locked'], ['#ca9a04', 'Bonus']].map(([c, l]) => (
-          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: c, border: '1px solid rgba(255,255,255,0.1)' }} />{l}
-          </div>
-        ))}
-      </div>
+      {/* ── Floating Chat Button ── */}
+      <ChatButton
+        roadmap={roadmap}
+        currentModule={activeModule}
+        currentResource={activeResource}
+      />
     </div>
-  )
+  );
 }
