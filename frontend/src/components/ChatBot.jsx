@@ -6,6 +6,7 @@ export default function ChatBot({ roadmap, currentModule, currentResource, isOpe
   const [messages, setMessages] = useState([
     {
       role: "assistant",
+      // Changed to use roadmap?.goal for the greeting
       content: `Hi! I'm your Roadmapify AI tutor 🤖\n\nI can see you're working on: **${roadmap?.goal || "your roadmap"}**${currentModule ? `\n\nCurrently on: **${currentModule.title}**` : ""}\n\nAsk me anything — I'll explain concepts, break down confusing topics, or give you examples specific to what you're learning right now.`,
     },
   ]);
@@ -17,7 +18,6 @@ export default function ChatBot({ roadmap, currentModule, currentResource, isOpe
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Update greeting when module changes
   useEffect(() => {
     if (currentModule) {
       setMessages((prev) => [
@@ -98,7 +98,6 @@ export default function ChatBot({ roadmap, currentModule, currentResource, isOpe
         overflow: "hidden",
       }}
     >
-      {/* Header */}
       <div
         style={{
           padding: "16px 20px",
@@ -148,7 +147,6 @@ export default function ChatBot({ roadmap, currentModule, currentResource, isOpe
         </button>
       </div>
 
-      {/* Context badge */}
       {currentResource && (
         <div
           style={{
@@ -163,7 +161,6 @@ export default function ChatBot({ roadmap, currentModule, currentResource, isOpe
         </div>
       )}
 
-      {/* Messages */}
       <div
         style={{
           flex: 1,
@@ -233,7 +230,6 @@ export default function ChatBot({ roadmap, currentModule, currentResource, isOpe
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
       <div
         style={{
           padding: "12px 16px",

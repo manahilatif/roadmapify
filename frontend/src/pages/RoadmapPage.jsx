@@ -19,7 +19,8 @@ const TYPE_COLORS = {
   platform: "#f59e0b",
 };
 
-export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
+// Changed 'roadmap' to 'data' to match App.jsx prop name
+export default function RoadmapPage({ data: initialRoadmap, onBack }) {
   const [roadmap, setRoadmap] = useState(initialRoadmap);
   const [activeModuleId, setActiveModuleId] = useState(null);
   const [activeResource, setActiveResource] = useState(null);
@@ -39,7 +40,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
     ? Math.round((completedModules.size / modules.length) * 100)
     : 0;
 
-  // ── Toggle module complete ──────────────────────────────────────────────
   const toggleComplete = async (moduleId) => {
     const next = new Set(completedModules);
     const wasCompleted = next.has(moduleId);
@@ -48,7 +48,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
     setSaveStatus("Saved ✓");
     setTimeout(() => setSaveStatus(""), 2000);
 
-    // Persist to backend
     try {
       await fetch(`${API_URL}/progress`, {
         method: "POST",
@@ -62,7 +61,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
     } catch (_) { /* non-fatal */ }
   };
 
-  // ── Dynamic roadmap update ──────────────────────────────────────────────
   const handleUpdate = async () => {
     setUpdating(true);
     try {
@@ -89,7 +87,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
     }
   };
 
-  // ── Open resource safely ─────────────────────────────────────────────────
   const openResource = useCallback((url, resource) => {
     setActiveResource(resource);
     if (url && url.startsWith("http")) {
@@ -119,7 +116,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
           </div>
         </div>
 
-        {/* Progress bar */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: "120px", height: "6px", background: "rgba(255,255,255,0.1)", borderRadius: "3px", overflow: "hidden" }}>
             <div style={{ width: `${progressPct}%`, height: "100%", background: "#dc2626", borderRadius: "3px", transition: "width 0.4s ease" }} />
@@ -137,7 +133,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
         </button>
       </div>
 
-      {/* ── Update panel ── */}
       {showUpdatePanel && (
         <div style={{
           background: "rgba(220,38,38,0.05)", borderBottom: "1px solid rgba(220,38,38,0.15)",
@@ -176,7 +171,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
         </div>
       )}
 
-      {/* ── Architecture note ── */}
       {roadmap?.architecture?.recommended && (
         <div style={{ margin: "20px 24px 0", padding: "14px 18px", background: "rgba(220,38,38,0.05)", border: "1px solid rgba(220,38,38,0.15)", borderRadius: "12px", display: "flex", gap: "12px", alignItems: "flex-start" }}>
           <span style={{ fontSize: "18px" }}>🏗</span>
@@ -187,7 +181,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
         </div>
       )}
 
-      {/* ── Milestones strip ── */}
       {milestones.length > 0 && (
         <div style={{ margin: "16px 24px", display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
           {milestones.map((ms, i) => (
@@ -204,9 +197,7 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
         </div>
       )}
 
-      {/* ── Main content ── */}
       <div style={{ display: "flex", gap: "0", minHeight: "calc(100vh - 60px)" }}>
-
         {/* Module list */}
         <div style={{ width: "320px", flexShrink: 0, borderRight: "1px solid rgba(255,255,255,0.06)", overflowY: "auto", padding: "16px 0" }}>
           {modules.map((mod) => {
@@ -224,7 +215,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
                   display: "flex", alignItems: "flex-start", gap: "12px",
                 }}
               >
-                {/* Check circle */}
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleComplete(mod.id); }}
                   style={{
@@ -254,7 +244,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
           {activeModule && (
             <>
-              {/* Module header */}
               <div style={{ marginBottom: "24px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
                   <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700 }}>{activeModule.title}</h2>
@@ -275,7 +264,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
                 </p>
               </div>
 
-              {/* Tasks */}
               {activeModule.tasks?.length > 0 && (
                 <section style={{ marginBottom: "24px" }}>
                   <h3 style={{ fontSize: "14px", fontWeight: 600, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Tasks</h3>
@@ -290,7 +278,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
                 </section>
               )}
 
-              {/* Resources */}
               {activeModule.resources?.length > 0 && (
                 <section style={{ marginBottom: "24px" }}>
                   <h3 style={{ fontSize: "14px", fontWeight: 600, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Resources</h3>
@@ -334,14 +321,12 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
                 </section>
               )}
 
-              {/* Checkpoint */}
               {activeModule.checkpoint && (
                 <section style={{
                   background: "rgba(220,38,38,0.04)", border: "1px solid rgba(220,38,38,0.15)",
                   borderRadius: "12px", padding: "18px 20px",
                 }}>
                   <h3 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: 600, color: "#dc2626" }}>🏁 Checkpoint</h3>
-
                   {activeModule.checkpoint.practiceQuestions?.length > 0 && (
                     <>
                       <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.5)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Practice Questions</div>
@@ -352,7 +337,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
                       </ol>
                     </>
                   )}
-
                   {activeModule.checkpoint.miniProject && (
                     <>
                       <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.5)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Mini Project</div>
@@ -366,7 +350,6 @@ export default function RoadmapPage({ roadmap: initialRoadmap, onBack }) {
         </div>
       </div>
 
-      {/* ── Floating Chat Button ── */}
       <ChatButton
         roadmap={roadmap}
         currentModule={activeModule}
