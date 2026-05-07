@@ -68,7 +68,7 @@ const BASE_STEPS = [
     id: 'weeks', question: 'Target completion in…',
     sub: 'Pick a timeframe that feels ambitious but doable.',
     type: 'choice', field: 'weeks',
-    choices: TIMEFRAME_DEFAULTS.skill, // swapped dynamically after topic classify
+    choices: TIMEFRAME_DEFAULTS.skill, 
   },
 ]
 
@@ -82,7 +82,7 @@ function Dots({ step, total }) {
       {Array.from({ length: total }).map((_, i) => (
         <div key={i} style={{
           height: '5px', borderRadius: '3px', transition: 'all 0.3s',
-          background: i < step ? 'var(--r6)' : i === step ? 'var(--r4)' : 'var(--s3)',
+          background: i < step ? '#dc2626' : i === step ? '#991b1b' : 'rgba(255,255,255,0.1)',
           width: i === step ? '22px' : '5px',
         }} />
       ))}
@@ -96,26 +96,23 @@ function Choice({ c, selected, onSelect }) {
       onClick={() => onSelect(c.v)}
       style={{
         width: '100%',
-        background: selected ? 'rgba(229,41,41,0.09)' : 'var(--s1)',
-        border: `1px solid ${selected ? '#e52929' : 'var(--border-md)'}`,
+        background: selected ? 'rgba(220,38,38,0.09)' : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${selected ? '#dc2626' : 'rgba(255,255,255,0.1)'}`,
         borderRadius: '13px', padding: '15px 18px', cursor: 'pointer',
         textAlign: 'left', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', transition: 'all 0.14s',
-        boxShadow: selected ? '0 0 0 1px #e52929' : 'none', marginBottom: '8px',
+        marginBottom: '8px',
       }}
-      onMouseEnter={e => { if (!selected) e.currentTarget.style.borderColor = 'var(--border-hi)' }}
-      onMouseLeave={e => { if (!selected) e.currentTarget.style.borderColor = 'var(--border-md)' }}
     >
       <div>
-        <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '0.9rem', color: selected ? 'var(--r3)' : 'var(--tp)', marginBottom: '2px' }}>{c.l}</div>
-        <div style={{ fontSize: '0.78rem', color: 'var(--ts)' }}>{c.d}</div>
+        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: selected ? '#dc2626' : '#fff', marginBottom: '2px' }}>{c.l}</div>
+        <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)' }}>{c.d}</div>
       </div>
       <div style={{
         width: '18px', height: '18px', borderRadius: '50%',
-        border: `1.5px solid ${selected ? '#e52929' : 'var(--border-md)'}`,
-        background: selected ? '#e52929' : 'transparent',
+        border: `1.5px solid ${selected ? '#dc2626' : 'rgba(255,255,255,0.2)'}`,
+        background: selected ? '#dc2626' : 'transparent',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0, transition: 'all 0.14s',
       }}>
         {selected && <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#fff' }} />}
       </div>
@@ -123,7 +120,7 @@ function Choice({ c, selected, onSelect }) {
   )
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export default function OnboardingPage({ onGenerate, onBack, prefill }) {
   const [steps, setSteps]           = useState(BASE_STEPS)
@@ -142,34 +139,23 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
     }
   }, [prefill])
 
-  // After user types topic, classify it to get goal-specific timeframe options
   const classifyAndUpdateTimeframes = async (topic) => {
     setClassifying(true)
     try {
+      // Small call to backend to classify the topic type
       const res = await fetch(`${import.meta.env.VITE_API_URL}/generate-roadmap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal: topic, timeframe: 'not selected yet', experience: 'beginner' }),
+        body: JSON.stringify({ goal: topic, timeframe: 'check', level: 'beginner' }),
       })
       const data = await res.json()
 
-      let newChoices = null
-      if (data.timeframe_options?.length) {
-        newChoices = data.timeframe_options.map(o => ({
-          v: o.value ?? o.v,
-          l: o.label ?? o.l,
-          d: o.sublabel ?? o.d ?? '',
-        }))
-      } else if (data.goal_type) {
-        newChoices = TIMEFRAME_DEFAULTS[data.goal_type] || TIMEFRAME_DEFAULTS.skill
-      }
-
+      let newChoices = data.goal_type ? TIMEFRAME_DEFAULTS[data.goal_type] : TIMEFRAME_DEFAULTS.skill
       if (newChoices) {
         setSteps(prev => prev.map(s => s.id === 'weeks' ? { ...s, choices: newChoices } : s))
-        setAnswers(a => ({ ...a, weeks: '' }))
       }
     } catch {
-      // silently fall back to defaults
+      // Fallback silently
     } finally {
       setClassifying(false)
     }
@@ -182,126 +168,108 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
     : val !== '' && val !== undefined
 
   const handleNext = async () => {
-    // Kick off background classify when leaving topic step
     if (cur.id === 'topic' && String(val).trim().length > 2) {
       classifyAndUpdateTimeframes(String(val).trim())
     }
 
     if (step < steps.length - 1) { setStep(s => s + 1); return }
 
-    // Last step — generate
+    // Final Submission
     setLoading(true)
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/generate-roadmap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          goal: `${answers.topic} — goal type: ${answers.goal}, level: ${answers.level}, ${answers.hoursPerWeek} hrs/week`,
-          timeframe: String(answers.weeks),
-          experience: answers.level || 'beginner',
+          goal: answers.topic,
+          domain: answers.goal || "general",
+          level: answers.level || 'beginner', // Fixed: backend expects 'level'
+          hours_per_week: answers.hoursPerWeek,
+          learning_style: "mixed",
+          context_extra: `Target completion: ${answers.weeks}`,
         }),
       })
       const data = await res.json()
-      onGenerate({ ...data, userAnswers: answers })
-    } catch {
+      
+      if (data.success) {
+        // Unwrap the roadmap object before passing to App.jsx
+        onGenerate(data.roadmap)
+      } else {
+        throw new Error("API failed")
+      }
+    } catch (err) {
+      console.error("Generation error:", err)
       onGenerate(fallback(answers))
     } finally {
       setLoading(false)
     }
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
-      <div style={{ width: '48px', height: '48px', border: '2px solid var(--s3)', borderTop: '2px solid var(--r4)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
+      <div style={{ width: '48px', height: '48px', border: '2px solid rgba(255,255,255,0.1)', borderTop: '2px solid #dc2626', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: '1.1rem', marginBottom: '6px' }}>Building your roadmap…</div>
-        <div style={{ color: 'var(--ts)', fontSize: '0.85rem' }}>Our AI is mapping out your personalized journey</div>
+        <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '6px' }}>Building your roadmap…</div>
+        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>Our AI is mapping out your personalized journey</div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 24px 40px' }}>
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
       <Navbar onBack={onBack} showBack />
 
-      {prefill && (
-        <div style={{
-          width: '100%', maxWidth: '500px',
-          background: 'rgba(229,41,41,0.08)', border: '1px solid rgba(229,41,41,0.2)',
-          borderRadius: '10px', padding: '10px 16px', marginBottom: '16px',
-          display: 'flex', alignItems: 'center', gap: '10px',
-          fontSize: '0.8rem', color: 'var(--r3)',
-        }}>
-          <span style={{ fontSize: '14px' }}>✦</span>
-          Pre-filled from an example — tweak anything you like before generating.
-        </div>
-      )}
-
-      <div style={{ width: '100%', maxWidth: '500px', animation: 'fadeUp 0.4s var(--ease)' }}>
+      <div style={{ width: '100%', maxWidth: '500px' }}>
         <Dots step={step} total={steps.length} />
 
-        <div style={{ fontSize: '0.68rem', fontFamily: "'Syne',sans-serif", fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'var(--tm)', textAlign: 'center', marginBottom: '10px' }}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: '10px' }}>
           Step {step + 1} of {steps.length}
         </div>
-        <h2 style={{ fontSize: 'clamp(1.5rem,3vw,2rem)', textAlign: 'center', marginBottom: '9px' }}>{cur.question}</h2>
-        <p style={{ color: 'var(--ts)', textAlign: 'center', fontSize: '0.875rem', marginBottom: '30px', lineHeight: 1.6 }}>{cur.sub}</p>
+        <h2 style={{ fontSize: '1.8rem', textAlign: 'center', marginBottom: '10px' }}>{cur.question}</h2>
+        <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontSize: '0.9rem', marginBottom: '32px' }}>{cur.sub}</p>
 
-        <div style={{ marginBottom: '28px' }}>
+        <div style={{ marginBottom: '32px' }}>
           {cur.type === 'text' && (
             <input
               autoFocus type="text" placeholder={cur.placeholder}
               value={answers[cur.field]}
               onChange={e => setAnswers(a => ({ ...a, [cur.field]: e.target.value }))}
               onKeyDown={e => { if (e.key === 'Enter' && canNext) handleNext() }}
-              style={{ fontSize: '1rem', padding: '15px 18px' }}
+              style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '15px', color: '#fff', fontSize: '1rem' }}
             />
           )}
 
           {cur.type === 'choice' && (
-            <>
-              {classifying && cur.id === 'weeks' && (
-                <div style={{ textAlign: 'center', color: 'var(--tm)', fontSize: '0.8rem', marginBottom: '14px' }}>
-                  Analysing your goal… ✦
-                </div>
-              )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {cur.choices.map(c => (
                 <Choice key={c.v} c={c} selected={answers[cur.field] === c.v} onSelect={v => setAnswers(a => ({ ...a, [cur.field]: v }))} />
               ))}
-            </>
+            </div>
           )}
 
           {cur.type === 'slider' && (
-            <div style={{ background: 'var(--s1)', border: '1px solid var(--border)', borderRadius: '18px', padding: '28px 24px' }}>
-              <div style={{ textAlign: 'center', fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: '2.8rem', color: 'var(--r4)', letterSpacing: '-0.04em', marginBottom: '20px' }}>
-                {answers[cur.field]}
-                <span style={{ fontSize: '0.875rem', color: 'var(--ts)', fontWeight: 400, marginLeft: '6px' }}>{cur.unit}</span>
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '18px', padding: '24px' }}>
+              <div style={{ textAlign: 'center', fontWeight: 800, fontSize: '2.5rem', color: '#dc2626', marginBottom: '16px' }}>
+                {answers[cur.field]} <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>{cur.unit}</span>
               </div>
               <input
                 type="range" min={cur.min} max={cur.max} value={answers[cur.field]}
                 onChange={e => setAnswers(a => ({ ...a, [cur.field]: Number(e.target.value) }))}
-                style={{
-                  width: '100%',
-                  background: `linear-gradient(to right,var(--r4) 0%,var(--r4) ${((answers[cur.field] - cur.min) / (cur.max - cur.min)) * 100}%,var(--s3) ${((answers[cur.field] - cur.min) / (cur.max - cur.min)) * 100}%,var(--s3) 100%)`,
-                }}
+                style={{ width: '100%', accentColor: '#dc2626' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '9px', fontSize: '0.7rem', color: 'var(--tm)' }}>
-                <span>{cur.min} hrs</span><span>{cur.max} hrs</span>
-              </div>
             </div>
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '12px' }}>
           {step > 0 && (
-            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setStep(s => s - 1)}>← Back</button>
+            <button onClick={() => setStep(s => s - 1)} style={{ flex: 1, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: '12px', cursor: 'pointer' }}>Back</button>
           )}
           <button
-            className="btn btn-primary"
-            style={{ flex: 2, justifyContent: 'center', padding: '13px', opacity: canNext ? 1 : 0.4 }}
             onClick={handleNext}
             disabled={!canNext}
+            style={{ flex: 2, background: canNext ? '#dc2626' : 'rgba(220,38,38,0.2)', border: 'none', color: '#fff', padding: '14px', borderRadius: '12px', fontWeight: 600, cursor: canNext ? 'pointer' : 'not-allowed' }}
           >
             {step === steps.length - 1 ? 'Generate my roadmap →' : 'Continue →'}
           </button>
@@ -313,17 +281,11 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
 
 function fallback(a) {
   return {
-    title: `${a.topic} Roadmap`,
-    goal_type: 'skill',
-    total_xp: 500,
-    timeframe_options: TIMEFRAME_DEFAULTS.skill,
-    userAnswers: a,
-    nodes: [
-      { id: 'node_1',  title: 'Foundation',      description: 'Core concepts and setup.',     duration_label: 'Week 1–2',  status: 'active', type: 'main',  xp_reward: 100, emoji: '🚀', resources: [{ label: 'Official Docs', url: '', tip: 'Start here' }] },
-      { id: 'node_2',  title: 'Core Skills',     description: 'Key techniques and practice.', duration_label: 'Week 3–5',  status: 'locked', type: 'main',  xp_reward: 100, emoji: '🔧', resources: [] },
-      { id: 'node_3',  title: 'Build something', description: "Apply what you've learned.",   duration_label: 'Week 6–9',  status: 'locked', type: 'main',  xp_reward: 150, emoji: '🏗️', resources: [] },
-      { id: 'node_4',  title: 'Ship it',         description: 'Deploy and share your work.',  duration_label: 'Week 10+',  status: 'locked', type: 'main',  xp_reward: 150, emoji: '🚢', resources: [] },
-      { id: 'bonus_1', title: 'Go deeper',       description: 'Challenge yourself further.',  duration_label: 'Anytime',   status: 'locked', type: 'bonus', xp_reward: 250, emoji: '⭐', resources: [] },
-    ],
+    goal: a.topic || "My Roadmap",
+    domain: a.goal || "General",
+    totalWeeks: 4,
+    modules: [
+      { id: 1, title: 'Getting Started', week: 1, estimatedHours: a.hoursPerWeek, description: 'Fundamentals of the topic.', tasks: ['Set up tools', 'Learn basics'], resources: [] }
+    ]
   }
 }
