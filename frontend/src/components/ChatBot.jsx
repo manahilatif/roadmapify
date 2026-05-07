@@ -50,13 +50,23 @@ export default function ChatBot({ roadmap, currentModule, currentResource, isOpe
         }),
       });
 
-      if (!res.ok) throw new Error(`API error ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      if (data.success === false) {
+        setMessages((prev) => [...prev, { role: "assistant", content: data.reply || "The AI encountered an error. Please try again." }]);
+      } else {
+        setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      }
     } catch (err) {
+      const isNetworkError = err.message === "Failed to fetch" || err.message.includes("NetworkError");
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Sorry, I couldn't connect to the AI right now. Please try again in a moment." },
+        {
+          role: "assistant",
+          content: isNetworkError
+            ? "Cannot reach the backend. Make sure the server is running at " + API_URL + " and try again."
+            : "The AI ran into an error. Please try again in a moment.",
+        },
       ]);
     } finally {
       setLoading(false);

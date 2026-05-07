@@ -190,13 +190,7 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
         }),
       })
       const data = await res.json()
-      
-      if (data.success) {
-        // Unwrap the roadmap object before passing to App.jsx
-        onGenerate(data.roadmap)
-      } else {
-        throw new Error("API failed")
-      }
+      onGenerate(data)
     } catch (err) {
       console.error("Generation error:", err)
       onGenerate(fallback(answers))
@@ -280,12 +274,20 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
 }
 
 function fallback(a) {
+  const g = a.topic || 'your goal'
   return {
-    goal: a.topic || "My Roadmap",
-    domain: a.goal || "General",
-    totalWeeks: 4,
-    modules: [
-      { id: 1, title: 'Getting Started', week: 1, estimatedHours: a.hoursPerWeek, description: 'Fundamentals of the topic.', tasks: ['Set up tools', 'Learn basics'], resources: [] }
-    ]
+    title: `${g} Roadmap`,
+    description: 'A step-by-step learning path',
+    total_xp: 700,
+    nodes: [
+      { id: 'node_1', title: `Research ${g}`, description: 'Understand the full scope and set a measurable target.', type: 'main', emoji: '🔍', duration_label: 'Week 1', xp_reward: 100, status: 'active', steps: [`Search "${g} beginner guide" and read 2–3 overviews`, 'Write down the skills you need to acquire', 'Set a measurable goal', 'Find a community or forum for this topic'], resources: [{ label: 'freeCodeCamp', url: 'https://www.freecodecamp.org', tip: 'Free comprehensive learning' }] },
+      { id: 'node_2', title: 'Set up your environment', description: 'Get tools and accounts ready before diving in.', type: 'main', emoji: '⚙️', duration_label: 'Week 1–2', xp_reward: 100, status: 'locked', steps: ['Create required accounts', 'Install recommended tools', 'Bookmark key reference sites', 'Block 30 min daily in your calendar'], resources: [{ label: 'MDN Web Docs', url: 'https://developer.mozilla.org', tip: 'Official reference' }] },
+      { id: 'node_3', title: 'First practice session', description: 'Do your first hands-on exercise.', type: 'main', emoji: '✏️', duration_label: 'Week 2–3', xp_reward: 100, status: 'locked', steps: ['Pick one beginner exercise', 'Work through it without help', 'Review mistakes', 'Repeat the next day'], resources: [{ label: 'Kaggle Learn', url: 'https://www.kaggle.com/learn', tip: 'Hands-on micro-courses' }] },
+      { id: 'node_4', title: 'Drill your weak spots', description: 'Focus on the areas where you struggle most.', type: 'main', emoji: '🏋️', duration_label: 'Week 3–4', xp_reward: 110, status: 'locked', steps: ['List your 2 weakest areas', 'Find a focused resource for each', 'Spend 20 min/day on them for one week', 'Track improvement with a simple log'], resources: [] },
+      { id: 'node_5', title: 'Mock test or mini-project', description: 'Simulate the real challenge under realistic conditions.', type: 'main', emoji: '🎯', duration_label: 'Week 4–5', xp_reward: 120, status: 'locked', steps: ['Find a practice test or project brief', 'Complete it timed', 'Score yourself honestly', 'List 3 improvements'], resources: [] },
+      { id: 'node_6', title: 'Close remaining gaps', description: 'Fix what the mock test exposed.', type: 'main', emoji: '🔧', duration_label: 'Week 5–6', xp_reward: 120, status: 'locked', steps: ['Rank gaps by impact', 'Spend one session on each top gap', 'Re-do the weakest section'], resources: [] },
+      { id: 'node_7', title: 'Final attempt', description: 'Submit the real thing and reflect.', type: 'main', emoji: '🏁', duration_label: 'Week 7–8', xp_reward: 150, status: 'locked', steps: ['Take the real exam or submit project', 'Record your outcome', 'Write what went well and what to improve'], resources: [] },
+      { id: 'bonus_1', title: 'Advanced stretch challenge', description: 'Push 20% beyond your original goal.', type: 'bonus', emoji: '⭐', duration_label: 'Anytime', xp_reward: 250, status: 'locked', steps: ['Set a harder stretch goal', 'Find an advanced resource or mentor', 'Document and share your journey'], resources: [] },
+    ],
   }
 }

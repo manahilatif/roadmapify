@@ -1,8 +1,7 @@
 """
 roadmap_chain.py
 ----------------
-LangChain + Groq. Outputs nodes[] schema that the RoadmapPage expects.
-Forces 5-7 main nodes with step-by-step instructions and real resource URLs.
+LangChain + Groq. Generates a nodes[] roadmap where each node is ONE specific task.
 """
 import os, sys, json, pathlib, re
 
@@ -26,101 +25,366 @@ except ImportError:
         retrieve_context = None
 
 llm = ChatGroq(
-    model="llama3-70b-8192",
+    model="llama-3.3-70b-versatile",
     groq_api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.4,
+    temperature=0.7,
+    max_tokens=4096,
 )
 
-SYSTEM_PROMPT = """You are Roadmapify, an expert learning curriculum designer.
+# ── Prompts ───────────────────────────────────────────────────────────────────
+#
+# KEY DESIGN DECISIONS:
+#   1. Every placeholder uses [BRACKET] syntax — the model fills these in.
+#   2. All 8 nodes are shown explicitly in the template — no "..." anywhere.
+#   3. JSON braces are escaped as {{ / }} for LangChain's template engine.
+#
+SYSTEM_PROMPT = """You are Roadmapify. Return a complete learning roadmap as a JSON object.
 
-Retrieved Knowledge:
-{context}
+Context: {context}
 
-Generate a learning roadmap as a JSON object.
+RULES:
+1. Output EXACTLY 8 nodes: node_1, node_2, node_3, node_4, node_5, node_6, node_7, bonus_1
+2. node_1 status "active"; all others status "locked"
+3. node_1 through node_7 type "main"; bonus_1 type "bonus"
+4. Each title must be 3-7 words, SPECIFIC to the learner's goal.
+   FORBIDDEN titles: "Getting Started", "Foundation", "Learn basics", "Core Skills", "Introduction", "Overview"
+5. Each main node: steps (3-5 concrete how-to instructions) and resources (2 real https:// URLs)
+6. Do NOT use "..." anywhere. Write all 8 nodes in full.
 
-STRICT RULES — violating any rule makes the output useless:
-1. You MUST generate exactly 5 to 7 nodes with type "main", plus exactly 1 node with type "bonus". Total = 6 to 8 nodes.
-2. Each main node = one focused learning stage (e.g. "Set up your environment", "Master reading skills", "Practice writing essays").
-3. The first node always has status "active". ALL other nodes have status "locked".
-4. Each node MUST have a "steps" array with 3 to 5 specific, numbered instructions telling the user exactly what to do.
-5. Each node MUST have a "resources" array with 2 to 3 real items. URLs must start with https:// and be from real sites.
+Real resource URLs:
+https://www.ielts.org | https://ieltsliz.com | https://www.ielts-simon.com
+https://www.britishcouncil.org/exam/ielts/ielts-practice-tests
+https://www.freecodecamp.org/learn | https://javascript.info
+https://developer.mozilla.org | https://docs.python.org/3/tutorial
+https://www.kaggle.com/learn | https://git-scm.com/book/en/v2
+https://tailwindcss.com/docs | https://docs.docker.com/get-started
 
-REAL URL EXAMPLES you may use:
-- https://www.freecodecamp.org/learn
-- https://developer.mozilla.org/en-US/docs/Web/JavaScript
-- https://javascript.info
-- https://reactjs.org/docs/getting-started.html
-- https://nodejs.org/en/docs/guides/getting-started-guide
-- https://www.postgresql.org/docs/current/tutorial.html
-- https://git-scm.com/book/en/v2
-- https://docs.python.org/3/tutorial
-- https://www.youtube.com/watch?v=PkZNo7MFNFg
-- https://www.youtube.com/watch?v=rfscVS0vtbw
-- https://www.youtube.com/watch?v=UB1O30fR-EE
-- https://www.youtube.com/watch?v=Ke90Tje7VS0
-- https://css-tricks.com/snippets/css/a-guide-to-flexbox
-- https://www.ielts.org/about-ielts/what-is-ielts
-- https://www.britishcouncil.org/exam/ielts/ielts-practice-tests
-- https://ieltsliz.com
-- https://www.ielts-simon.com
-- https://www.kaggle.com/learn
-- https://www.w3schools.com
-- https://tailwindcss.com/docs
-- https://docs.docker.com/get-started
-- https://www.figma.com/resources/learn-design
+Return ONLY valid JSON. Start with {{ and end with }}. No markdown. No text outside the JSON.
 
-OUTPUT FORMAT — return ONLY this JSON, no markdown, no explanation:
+Template — replace every [PLACEHOLDER] with real goal-specific content:
 {{
-  "title": "string — descriptive roadmap title",
-  "description": "string",
-  "total_xp": number,
+  "title": "[Goal name] Roadmap",
+  "description": "[One sentence about this learning path]",
+  "total_xp": 850,
   "nodes": [
     {{
       "id": "node_1",
-      "title": "string — specific stage name",
-      "description": "string — 1-2 sentences what this stage covers",
+      "title": "[Specific first task for this goal]",
+      "description": "[One sentence explaining what the learner does]",
       "type": "main",
-      "emoji": "single emoji",
-      "duration_label": "e.g. Week 1-2",
-      "xp_reward": number,
+      "emoji": "[single emoji]",
+      "duration_label": "Week 1",
+      "xp_reward": 100,
       "status": "active",
-      "steps": [
-        "Step 1: [exact specific action the user should take]",
-        "Step 2: [next action]",
-        "Step 3: [next action]"
-      ],
+      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]", "[Exact action 4]"],
       "resources": [
-        {{
-          "label": "Resource name",
-          "url": "https://real-url.com/path",
-          "tip": "Why this resource is useful"
-        }}
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
       ]
     }},
-    ... 4 to 6 more main nodes with status "locked" ...
+    {{
+      "id": "node_2",
+      "title": "[Specific second task for this goal]",
+      "description": "[One sentence]",
+      "type": "main",
+      "emoji": "[single emoji]",
+      "duration_label": "Week 2",
+      "xp_reward": 100,
+      "status": "locked",
+      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
+      "resources": [
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
+      ]
+    }},
+    {{
+      "id": "node_3",
+      "title": "[Specific third task for this goal]",
+      "description": "[One sentence]",
+      "type": "main",
+      "emoji": "[single emoji]",
+      "duration_label": "Week 3",
+      "xp_reward": 100,
+      "status": "locked",
+      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
+      "resources": [
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
+      ]
+    }},
+    {{
+      "id": "node_4",
+      "title": "[Specific fourth task for this goal]",
+      "description": "[One sentence]",
+      "type": "main",
+      "emoji": "[single emoji]",
+      "duration_label": "Week 4",
+      "xp_reward": 110,
+      "status": "locked",
+      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
+      "resources": [
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
+      ]
+    }},
+    {{
+      "id": "node_5",
+      "title": "[Specific fifth task for this goal]",
+      "description": "[One sentence]",
+      "type": "main",
+      "emoji": "[single emoji]",
+      "duration_label": "Week 5",
+      "xp_reward": 120,
+      "status": "locked",
+      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
+      "resources": [
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
+      ]
+    }},
+    {{
+      "id": "node_6",
+      "title": "[Specific sixth task for this goal]",
+      "description": "[One sentence]",
+      "type": "main",
+      "emoji": "[single emoji]",
+      "duration_label": "Week 6",
+      "xp_reward": 120,
+      "status": "locked",
+      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
+      "resources": [
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
+      ]
+    }},
+    {{
+      "id": "node_7",
+      "title": "[Specific seventh task for this goal]",
+      "description": "[One sentence]",
+      "type": "main",
+      "emoji": "[single emoji]",
+      "duration_label": "Week 7-8",
+      "xp_reward": 150,
+      "status": "locked",
+      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
+      "resources": [
+        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
+      ]
+    }},
     {{
       "id": "bonus_1",
-      "title": "string — advanced challenge title",
-      "description": "string",
+      "title": "[Advanced challenge title]",
+      "description": "[One sentence]",
       "type": "bonus",
       "emoji": "⭐",
       "duration_label": "Anytime",
       "xp_reward": 250,
       "status": "locked",
-      "steps": ["Step 1: [advanced action]", "Step 2: [advanced action]"],
+      "steps": ["[Advanced step 1]", "[Advanced step 2]"],
       "resources": []
     }}
   ]
 }}"""
 
-USER_PROMPT = """Create a complete learning roadmap for:
+USER_PROMPT = """Generate the roadmap for:
 
 Goal: {goal}
-Difficulty: {difficulty}
-Time available: {time_commitment}
+Level: {difficulty}
+Timeframe: {time_commitment}
 
-Remember: generate 5-7 main nodes + 1 bonus node. Each node needs steps[] and resources[] with real URLs."""
+Replace every [PLACEHOLDER] in the template with real, specific content for this exact goal.
+Output all 8 nodes (node_1 through node_7 plus bonus_1). Do not skip any node."""
 
+
+# ── Local fallback (used when LLM fails both attempts) ────────────────────────
+
+def _build_fallback(goal: str) -> dict:
+    g = goal.strip()
+    return {
+        "title":       f"{g} Roadmap",
+        "description": "A step-by-step learning path",
+        "total_xp":    850,
+        "nodes": [
+            {
+                "id": "node_1",
+                "title": f"Understand what {g} involves",
+                "description": f"Research the scope of {g} and set a clear measurable goal.",
+                "type": "main", "emoji": "🔍",
+                "duration_label": "Week 1", "xp_reward": 100, "status": "active",
+                "steps": [
+                    f"Search '{g} beginner guide' and read 2-3 overviews",
+                    "Write down the skills or knowledge you need to acquire",
+                    "Set a measurable target (score, project, or certification)",
+                    "Find a community or forum for this topic and join it",
+                ],
+                "resources": [
+                    {"label": "freeCodeCamp", "url": "https://www.freecodecamp.org", "tip": "Free and comprehensive"},
+                    {"label": "Reddit communities", "url": "https://www.reddit.com/r/learnprogramming", "tip": "Ask questions, get guidance"},
+                ],
+            },
+            {
+                "id": "node_2",
+                "title": "Set up your learning environment",
+                "description": "Create the accounts and install the tools you need before you start.",
+                "type": "main", "emoji": "⚙️",
+                "duration_label": "Week 1-2", "xp_reward": 100, "status": "locked",
+                "steps": [
+                    "Create any required accounts (course platforms, official sites)",
+                    "Download or install recommended tools and software",
+                    "Bookmark 3-5 key reference sites for quick access",
+                    "Block 30 minutes daily in your calendar for practice",
+                ],
+                "resources": [
+                    {"label": "MDN Web Docs", "url": "https://developer.mozilla.org", "tip": "Official reference"},
+                    {"label": "The Odin Project", "url": "https://www.theodinproject.com", "tip": "Free structured curriculum"},
+                ],
+            },
+            {
+                "id": "node_3",
+                "title": "Complete your first practice session",
+                "description": "Do your first hands-on exercise to establish a baseline.",
+                "type": "main", "emoji": "✏️",
+                "duration_label": "Week 2-3", "xp_reward": 100, "status": "locked",
+                "steps": [
+                    "Pick one beginner exercise or practice test for this topic",
+                    "Work through it without help first — note where you get stuck",
+                    "Review your mistakes and write down areas to improve",
+                    "Repeat with a new exercise the following day",
+                ],
+                "resources": [
+                    {"label": "Kaggle Learn", "url": "https://www.kaggle.com/learn", "tip": "Hands-on micro-courses"},
+                    {"label": "freeCodeCamp", "url": "https://www.freecodecamp.org/learn", "tip": "Free exercises and projects"},
+                ],
+            },
+            {
+                "id": "node_4",
+                "title": "Drill your weakest area",
+                "description": "Identify and intensively practice your two biggest weak spots.",
+                "type": "main", "emoji": "🏋️",
+                "duration_label": "Week 3-4", "xp_reward": 110, "status": "locked",
+                "steps": [
+                    "List your 2 weakest areas based on practice session results",
+                    "Find a focused resource or exercise for each weak area",
+                    "Spend 20-30 min per day on these specific areas for one week",
+                    "Track your improvement with a simple log or score sheet",
+                ],
+                "resources": [
+                    {"label": "YouTube tutorials", "url": "https://www.youtube.com", "tip": "Search for targeted topic walkthroughs"},
+                ],
+            },
+            {
+                "id": "node_5",
+                "title": "Take a timed mock test or project",
+                "description": "Simulate the real challenge under realistic conditions.",
+                "type": "main", "emoji": "🎯",
+                "duration_label": "Week 4-5", "xp_reward": 120, "status": "locked",
+                "steps": [
+                    "Find a full practice test or project brief that matches your goal",
+                    "Complete it under realistic conditions — set a timer",
+                    "Score or review your output honestly against a rubric",
+                    "List 3 specific improvements to make before the next attempt",
+                ],
+                "resources": [
+                    {"label": "Kaggle Competitions", "url": "https://www.kaggle.com", "tip": "Real-world problem practice"},
+                ],
+            },
+            {
+                "id": "node_6",
+                "title": "Close remaining gaps",
+                "description": "Use your mock test results to fix the specific things still missing.",
+                "type": "main", "emoji": "🔧",
+                "duration_label": "Week 5-6", "xp_reward": 120, "status": "locked",
+                "steps": [
+                    "Review mock test results and rank gaps by impact",
+                    "Spend one focused session on each of the top 3 gaps",
+                    "Re-do the weakest section of your mock test",
+                ],
+                "resources": [
+                    {"label": "Stack Overflow", "url": "https://stackoverflow.com", "tip": "Find answers to specific problems"},
+                ],
+            },
+            {
+                "id": "node_7",
+                "title": "Final attempt and reflect",
+                "description": "Do your real attempt or final project, then document what you learned.",
+                "type": "main", "emoji": "🏁",
+                "duration_label": "Week 7-8", "xp_reward": 150, "status": "locked",
+                "steps": [
+                    "Take the real exam or submit the final project",
+                    "Record your score or outcome",
+                    "Write down 3 things that went well and 3 that could improve",
+                    "Decide on your next learning goal",
+                ],
+                "resources": [
+                    {"label": "freeCodeCamp", "url": "https://www.freecodecamp.org", "tip": "Continue with next topic"},
+                ],
+            },
+            {
+                "id": "bonus_1",
+                "title": "Go beyond — advanced challenge",
+                "description": "Push past your initial goal with a harder stretch target.",
+                "type": "bonus", "emoji": "⭐",
+                "duration_label": "Anytime", "xp_reward": 250, "status": "locked",
+                "steps": [
+                    "Set a stretch goal 20% harder than your original target",
+                    "Find an advanced course or mentor at this level",
+                    "Document your journey and share it publicly",
+                ],
+                "resources": [],
+            },
+        ],
+    }
+
+
+# ── Core generation helpers ───────────────────────────────────────────────────
+
+def _call_llm(context_text: str, goal: str, difficulty: str, time_commitment: str) -> dict:
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        ("human",  USER_PROMPT),
+    ])
+    response = (prompt | llm).invoke({
+        "context":         context_text,
+        "goal":            goal,
+        "difficulty":      difficulty,
+        "time_commitment": time_commitment,
+    })
+    raw = response.content.strip()
+    raw = re.sub(r'^```(?:json)?\s*', '', raw)
+    raw = re.sub(r'\s*```$',          '', raw).strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        if m:
+            return json.loads(m.group())
+        raise ValueError(f"Non-JSON from LLM: {raw[:300]}")
+
+
+def _sanitize_urls(data: dict) -> dict:
+    BAD = ["example.com", "placeholder", "N/A", "http://", "https://url", "[real-url]", "[url]"]
+    FALLBACKS = [
+        {"label": "freeCodeCamp",    "url": "https://www.freecodecamp.org/learn",   "tip": "Free comprehensive learning"},
+        {"label": "MDN Web Docs",    "url": "https://developer.mozilla.org",         "tip": "Official web documentation"},
+        {"label": "The Odin Project","url": "https://www.theodinproject.com",        "tip": "Free full-stack curriculum"},
+    ]
+    for node in data.get("nodes", []):
+        clean = []
+        for i, res in enumerate(node.get("resources", [])):
+            url = res.get("url", "")
+            is_bad = (
+                not url
+                or not url.startswith("https://")
+                or any(p in url for p in BAD)
+                or len(url) < 16
+            )
+            if is_bad:
+                fb  = FALLBACKS[i % len(FALLBACKS)]
+                res = {**res, "url": fb["url"], "label": res.get("label") or fb["label"], "tip": res.get("tip") or fb["tip"]}
+            clean.append(res)
+        node["resources"] = clean
+    return data
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
 
 def generate_roadmap(goal: str, difficulty: str = "beginner", time_commitment: str = "1 month") -> dict:
     context_text = "Use general knowledge."
@@ -135,52 +399,28 @@ def generate_roadmap(goal: str, difficulty: str = "beginner", time_commitment: s
         except Exception as e:
             print(f"[RAG] non-fatal: {e}")
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", SYSTEM_PROMPT),
-        ("human", USER_PROMPT),
-    ])
+    data = None
+    for attempt in range(2):
+        try:
+            data = _call_llm(context_text, goal, difficulty, time_commitment)
+            main_nodes = [n for n in data.get("nodes", []) if n.get("type") != "bonus"]
+            if len(main_nodes) >= 4:
+                print(f"[generate_roadmap] attempt {attempt+1}: {len(main_nodes)} main nodes — OK")
+                break
+            print(f"[generate_roadmap] attempt {attempt+1}: only {len(main_nodes)} main nodes — retrying")
+            data = None
+        except Exception as e:
+            print(f"[generate_roadmap] attempt {attempt+1} error: {e}")
+            data = None
 
-    response = (prompt | llm).invoke({
-        "context":         context_text,
-        "goal":            goal,
-        "difficulty":      difficulty,
-        "time_commitment": time_commitment,
-    })
-
-    raw = response.content.strip()
-    raw = re.sub(r'^```(?:json)?\s*', '', raw)
-    raw = re.sub(r'\s*```$', '', raw).strip()
-
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        m = re.search(r'\{.*\}', raw, re.DOTALL)
-        if m:
-            data = json.loads(m.group())
-        else:
-            raise ValueError(f"Non-JSON from LLM: {raw[:300]}")
+    if data is None:
+        print("[generate_roadmap] both attempts failed — using built-in fallback")
+        return _build_fallback(goal)
 
     if not data.get("nodes"):
-        raise ValueError("No nodes returned by LLM")
+        return _build_fallback(goal)
 
-    # Sanitize: fix placeholder/empty URLs
-    BAD = ["example.com", "placeholder", "N/A", "http://", "https://url"]
-    FALLBACKS = [
-        {"label": "freeCodeCamp", "url": "https://www.freecodecamp.org/learn", "tip": "Free comprehensive learning platform"},
-        {"label": "MDN Web Docs", "url": "https://developer.mozilla.org", "tip": "Official web documentation"},
-        {"label": "The Odin Project", "url": "https://www.theodinproject.com", "tip": "Free full-stack curriculum"},
-    ]
-    for node in data["nodes"]:
-        clean = []
-        for i, res in enumerate(node.get("resources", [])):
-            url = res.get("url", "")
-            is_bad = not url or not url.startswith("https://") or any(p in url for p in BAD) or len(url) < 16
-            if is_bad:
-                fb = FALLBACKS[i % len(FALLBACKS)]
-                res = {**res, "url": fb["url"], "label": res.get("label") or fb["label"], "tip": res.get("tip") or fb["tip"]}
-            clean.append(res)
-        node["resources"] = clean
-
+    data = _sanitize_urls(data)
     data.setdefault("total_xp", sum(n.get("xp_reward", 100) for n in data["nodes"]))
     return data
 
@@ -188,23 +428,35 @@ def generate_roadmap(goal: str, difficulty: str = "beginner", time_commitment: s
 def chat_with_roadmap(user_message, roadmap_context, current_module, current_resource, chat_history):
     node_ctx = ""
     if current_module:
-        steps = current_module.get("steps", [])
-        node_ctx = f"\nCurrently on: {current_module.get('title','')}\nDescription: {current_module.get('description','')}\nSteps: {json.dumps(steps)}\n"
+        steps    = current_module.get("steps", [])
+        node_ctx = (
+            f"\nCurrently on: {current_module.get('title','')}"
+            f"\nDescription: {current_module.get('description','')}"
+            f"\nSteps: {json.dumps(steps)}\n"
+        )
     res_ctx = ""
     if current_resource:
         res_ctx = f"\nUsing resource: {current_resource.get('label', current_resource.get('title',''))} — {current_resource.get('url','')}\n"
 
-    system = f"""You are Roadmapify's AI tutor — expert, friendly, specific.
-Goal: {roadmap_context.get('title', roadmap_context.get('goal', ''))}
-{node_ctx}{res_ctx}
-Give specific, actionable help. Use code examples and exact commands when relevant."""
+    goal   = roadmap_context.get("title", roadmap_context.get("goal", "the learning goal"))
+    system = (
+        f"You are Roadmapify's AI tutor — expert, friendly, specific.\n"
+        f"Goal: {goal}\n{node_ctx}{res_ctx}\n"
+        f"Give specific, actionable help. Use examples and exact steps when relevant. Keep answers concise."
+    )
 
     messages = [("system", system)]
-    for m in chat_history[-10:]:
-        messages.append((m["role"], m["content"]))
+    for m in chat_history[-6:]:
+        role = m["role"] if m["role"] in ("human", "assistant", "system") else "human"
+        messages.append((role, m["content"]))
     messages.append(("human", user_message))
 
-    return (ChatPromptTemplate.from_messages(messages) | llm).invoke({}).content.strip()
+    try:
+        response = (ChatPromptTemplate.from_messages(messages) | llm).invoke({})
+        return response.content.strip()
+    except Exception as e:
+        print(f"[chat_with_roadmap] LLM error: {e}")
+        raise
 
 
 if __name__ == "__main__":
