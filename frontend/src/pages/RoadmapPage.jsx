@@ -576,7 +576,7 @@ export default function RoadmapPage({ data, onBack }) {
   const maxX = Math.max(...Object.values(pos).map(p => p.x), 0) + 80
   const maxY = Math.max(...Object.values(pos).map(p => p.y), 0) + 80
   const svgW = Math.max(maxX + 60, 420)
-  const svgH = allDone ? maxY + 120 : maxY + 40
+  const svgH = allDone ? maxY + 180 : maxY + 40
 
   function getState(n) {
     if (n.status === 'done')   return 'done'
@@ -747,7 +747,7 @@ export default function RoadmapPage({ data, onBack }) {
                   {earnedXP} XP earned · {streak} day streak
                 </text>
                 {nodes.some(n => n.type === 'bonus' && n.status === 'locked') && (
-                  <text textAnchor="middle" y={84} fontSize={11} fill="#ca9a04">
+                  <text textAnchor="middle" y={90} fontSize={11} fill="#ca9a04">
                     ★ Unlock the bonus path with your XP!
                   </text>
                 )}
