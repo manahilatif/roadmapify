@@ -15,7 +15,7 @@ const TIMEFRAME_DEFAULTS = {
     { v: '2_weeks',  l: '2 weeks',  d: 'Intense sprint' },
     { v: '1_month',  l: '1 month',  d: 'Steady pace' },
     { v: '3_months', l: '3 months', d: 'Comfortable' },
-    { v: '6_months', l: '6 months', d: 'Deep mastery' },
+    { v: '6_months', l: '6 months', d: 'Solid foundation' },
   ],
   project: [
     { v: '1_week',   l: '1 week',   d: 'Hackathon mode' },
@@ -29,6 +29,91 @@ const TIMEFRAME_DEFAULTS = {
     { v: '1_month',  l: '1 month',  d: 'Lock it in' },
     { v: '3_months', l: '3 months', d: 'Lifestyle change' },
   ],
+}
+
+// Maps preset keys → approximate weeks or hours for slider sync / nearest-match
+const CHOICE_METRIC = {
+  '30_min': { kind: 'hours', value: 0.5 },
+  '1_2_hrs': { kind: 'hours', value: 1.5 },
+  'half_day': { kind: 'hours', value: 4 },
+  'full_day': { kind: 'hours', value: 8 },
+  '1_week': { kind: 'weeks', value: 1 },
+  '2_weeks': { kind: 'weeks', value: 2 },
+  '1_month': { kind: 'weeks', value: 4 },
+  '3_months': { kind: 'weeks', value: 13 },
+  '6_months': { kind: 'weeks', value: 26 },
+}
+
+function metricForChoice(v) {
+  return CHOICE_METRIC[v] || { kind: 'weeks', value: 4 }
+}
+
+/** ~Months per preset (nearest-match when remapping goal types) */
+const CHOICE_MONTHS = {
+  '30_min': 0.001,
+  '1_2_hrs': 0.002,
+  'half_day': 0.01,
+  'full_day': 0.02,
+  '1_week': 0.25,
+  '2_weeks': 0.5,
+  '1_month': 1,
+  '3_months': 3,
+  '6_months': 6,
+}
+
+function approxMonthsForChoice(v) {
+  return CHOICE_MONTHS[v] ?? (metricForChoice(v).kind === 'weeks' ? (metricForChoice(v).value * 12) / 52 : 0)
+}
+
+function nearestChoiceFromMonths(totalMonths, choices) {
+  if (!choices?.length) return null
+  let best = choices[0]
+  let bestDist = Infinity
+  for (const c of choices) {
+    const m = approxMonthsForChoice(c.v)
+    const d = Math.abs(m - totalMonths)
+    if (d < bestDist) {
+      bestDist = d
+      best = c
+    }
+  }
+  return best
+}
+
+function isShortActivityChoices(choices) {
+  if (!choices?.length) return false
+  return choices.every((c) => ['30_min', '1_2_hrs', 'half_day', 'full_day'].includes(c.v))
+}
+
+function presetDisplayLabel(weeksKey, choices) {
+  const opt = choices?.find((c) => c.v === weeksKey)
+  return opt?.l || weeksKey
+}
+
+/** Plain-language duration for the backend LLM */
+function getApiTimeCommitment(answers, choices) {
+  if (isShortActivityChoices(choices)) {
+    const h = Number(answers.targetHours)
+    const safe = Number.isFinite(h) ? h : 1.5
+    if (safe < 1) return `about ${Math.round(safe * 60)} minutes total`
+    return `about ${Number(safe.toFixed(1))} hours total`
+  }
+  const mo = approxMonthsForChoice(answers.weeks)
+  if (mo <= 0.02) return 'about same day'
+  if (mo < 1) return `about ${Math.max(1, Math.round(mo * 4.33))} weeks total`
+  if (mo < 12) return `about ${mo % 1 < 0.05 ? Math.round(mo) : Number(mo.toFixed(1))} months total`
+  return `about ${(mo / 12).toFixed(1)} years total`
+}
+
+function formatCompletionExtra(answers, choices) {
+  const short = isShortActivityChoices(choices)
+  if (short) {
+    const h = Number(answers.targetHours)
+    const safe = Number.isFinite(h) ? h : 1.5
+    const label = safe < 1 ? `${Math.round(safe * 60)} min` : `${Number(safe.toFixed(1))} hours`
+    return `Target completion: ~${label} (preset ${answers.weeks})`
+  }
+  return `Target completion: ${presetDisplayLabel(answers.weeks, choices)} (preset ${answers.weeks})`
 }
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
@@ -67,13 +152,20 @@ const BASE_STEPS = [
   },
   {
     id: 'weeks', question: 'Target completion in…',
-    sub: 'Pick a timeframe that feels ambitious but doable.',
+    sub: 'Pick the timeframe that fits your goal.',
     type: 'choice', field: 'weeks',
-    choices: TIMEFRAME_DEFAULTS.skill, 
+    choices: TIMEFRAME_DEFAULTS.skill,
   },
 ]
 
-const DEFAULT_ANSWERS = { topic: '', level: '', goal: '', hoursPerWeek: 10, weeks: '' }
+const DEFAULT_ANSWERS = {
+  topic: '',
+  level: '',
+  goal: '',
+  hoursPerWeek: 10,
+  weeks: '6_months',
+  targetHours: 2,
+}
 
 function isValidRoadmapPayload(data) {
   if (!data || typeof data !== 'object') return false
@@ -145,11 +237,32 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
 
   useEffect(() => {
     if (prefill) {
-      setAnswers({ ...DEFAULT_ANSWERS, ...prefill })
+      const merged = { ...DEFAULT_ANSWERS, ...prefill }
+      if (!merged.weeks) merged.weeks = DEFAULT_ANSWERS.weeks
+      if (prefill.weeks) {
+        if (['30_min', '1_2_hrs', 'half_day', 'full_day'].includes(prefill.weeks)) {
+          merged.targetHours = metricForChoice(prefill.weeks).value
+        }
+      }
+      setAnswers(merged)
       setStep(BASE_STEPS.length - 1)
       if (prefill.topic) classifyAndUpdateTimeframes(prefill.topic)
     }
   }, [prefill])
+
+  /** If goal-type presets change (e.g. habit vs skill), remap weeks to a valid option */
+  useEffect(() => {
+    const cur = steps[step]
+    if (cur?.id !== 'weeks') return
+    const choices = cur.choices
+    if (!choices?.length) return
+    const ids = new Set(choices.map((c) => c.v))
+    if (ids.has(answers.weeks)) return
+    const mo = approxMonthsForChoice(answers.weeks)
+    const nearest = nearestChoiceFromMonths(Number.isFinite(mo) ? mo : 3, choices)
+    if (!nearest) return
+    setAnswers((a) => ({ ...a, weeks: nearest.v }))
+  }, [steps, step, answers.weeks])
 
   const classifyAndUpdateTimeframes = async (topic) => {
     setClassifying(true)
@@ -195,7 +308,12 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
           // Try to find a matching choice, or just select the first reasonable one
           const matchChoice = cur.choices.find(c => c.l.includes(suggested.split('-')[0]) || c.l.includes(suggested.split('–')[0]))
           if (matchChoice) {
-            setAnswers(a => ({ ...a, weeks: matchChoice.v }))
+            const m = metricForChoice(matchChoice.v)
+            setAnswers((a) => ({
+              ...a,
+              weeks: matchChoice.v,
+              ...(m.kind !== 'weeks' ? { targetHours: m.value } : {}),
+            }))
           }
         }
       }
@@ -210,7 +328,9 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
   const val    = answers[cur.field]
   const canNext = cur.type === 'text'
     ? String(val).trim().length > 2
-    : val !== '' && val !== undefined
+    : cur.id === 'weeks'
+      ? Boolean(answers.weeks)
+      : val !== '' && val !== undefined
 
   const handleNext = async () => {
     if (cur.id === 'topic' && String(val).trim().length > 2) {
@@ -238,7 +358,11 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
           level: answers.level || 'beginner',
           hours_per_week: answers.hoursPerWeek,
           learning_style: "mixed",
-          context_extra: `Target completion: ${answers.weeks}`,
+          time_commitment: getApiTimeCommitment(
+            answers,
+            steps.find((s) => s.id === 'weeks')?.choices || []
+          ),
+          context_extra: formatCompletionExtra(answers, steps.find((s) => s.id === 'weeks')?.choices || []),
         }),
       })
       const data = await res.json().catch(() => null)
@@ -322,8 +446,20 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
                 </button>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {cur.choices.map(c => (
-                  <Choice key={c.v} c={c} selected={answers[cur.field] === c.v} onSelect={v => setAnswers(a => ({ ...a, [cur.field]: v }))} />
+                {cur.choices.map((c) => (
+                  <Choice
+                    key={c.v}
+                    c={c}
+                    selected={answers[cur.field] === c.v}
+                    onSelect={(v) => {
+                      const m = metricForChoice(v)
+                      setAnswers((a) => ({
+                        ...a,
+                        [cur.field]: v,
+                        ...(m.kind !== 'weeks' ? { targetHours: m.value } : {}),
+                      }))
+                    }}
+                  />
                 ))}
               </div>
             </div>

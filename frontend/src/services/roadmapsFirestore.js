@@ -2,6 +2,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -45,4 +46,8 @@ export async function getUserRoadmap(uid, roadmapId) {
   const snap = await getDoc(doc(db, 'users', uid, 'roadmaps', roadmapId))
   if (!snap.exists()) return null
   return { id: snap.id, ...snap.data() }
+}
+
+export async function deleteUserRoadmap(uid, roadmapId) {
+  await deleteDoc(doc(db, 'users', uid, 'roadmaps', roadmapId))
 }

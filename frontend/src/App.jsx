@@ -40,15 +40,20 @@ function AppContent() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  /* Never await Firestore before showing the roadmap — a hung or denied write
-     would look like "generation failed". Save in the background instead. */
+  /**
+   * Open the roadmap immediately, then save to Firestore when signed in (non-blocking).
+   * Avoids the UI appearing stuck on onboarding if addDoc is slow or hangs. RoadmapPage
+   * picks up savedRoadmapId when the write completes. firestoreSaved skips duplicate legacy saves.
+   */
   const handleGenerated = (data, meta = {}) => {
     const enriched = {
       ...data,
       earnedXP: data.earnedXP ?? 0,
       streak: data.streak ?? 8,
       topic: meta.topic || data.topic || data.goal || '',
+      firestoreSaved: true,
     }
+
     setPrefill(null)
     setSavedRoadmapId(null)
     setRoadmapMountKey((k) => k + 1)
@@ -56,14 +61,12 @@ function AppContent() {
     navigate('roadmap')
 
     if (user?.uid) {
-      queueMicrotask(() => {
-        createUserRoadmap(user.uid, {
-          topic: enriched.topic || enriched.title || 'My roadmap',
-          roadmapData: enriched,
-        })
-          .then((id) => setSavedRoadmapId(id))
-          .catch((err) => console.error('Could not save roadmap to cloud:', err))
+      createUserRoadmap(user.uid, {
+        topic: enriched.topic || enriched.title || 'My roadmap',
+        roadmapData: enriched,
       })
+        .then((docId) => setSavedRoadmapId(docId))
+        .catch((err) => console.error('Could not save roadmap to cloud:', err))
     }
   }
 

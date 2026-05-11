@@ -209,6 +209,8 @@ Goal: {goal}
 Level: {difficulty}
 Timeframe: {time_commitment}
 
+The learner expects to finish within this timeframe. Spread milestones across the FULL horizon — for goals of a year or longer, use duration_label values in months/years (phases), not a compressed "Week 1–8" sprint unless the timeframe is actually short.
+
 Replace every [PLACEHOLDER] in the template with real, specific content for this exact goal.
 Output all 9 nodes (node_1 through node_7, plus checkpoint_1 after node_3, and bonus_1). 
 Include 3-5 multiple-choice quiz questions in checkpoint_1 that test understanding of the first 3 nodes.

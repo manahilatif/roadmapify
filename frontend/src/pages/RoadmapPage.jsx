@@ -2,7 +2,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import ChatButton from '../components/ChatButton.jsx'
 import { useAuth } from '../context/AuthContext'
-import { saveRoadmap, updateNodeCompletion, updateUserStreak } from '../lib/firestore'
+import { updateNodeCompletion, updateUserStreak } from '../lib/firestore'
+import { updateUserRoadmap } from '../services/roadmapsFirestore.js'
 
 /* ── Normalise any backend shape → flat node list ────────────────────────────*/
 function normalise(data) {
@@ -13,7 +14,9 @@ function normalise(data) {
       ...n,
       id:     String(n.id ?? `n${i}`),
       steps:  n.steps || [],
-      status: i === 0 ? 'active' : (n.status || 'locked'),
+      status: ['done', 'active', 'locked'].includes(n.status)
+        ? n.status
+        : (i === 0 ? 'active' : 'locked'),
     }))
 
     /* Safety net: if the LLM returned fewer than 3 main nodes but the first node
@@ -719,7 +722,9 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
   const [confetti, setConfetti] = useState(null)
   const [xpFloat,  setXpFloat]  = useState(null)
   const [activeResource, setActiveResource] = useState(null)
-  const [roadmapId, setRoadmapId] = useState(data?.id || `roadmap_${Date.now()}`)
+  const [roadmapId, setRoadmapId] = useState(
+    () => savedRoadmapId || data?.id || `roadmap_${Date.now()}`
+  )
   const [timeframe, setTimeframe] = useState(data?.timeframe || '')
   const [editingTimeframe, setEditingTimeframe] = useState(false)
   const [timeframeInput, setTimeframeInput] = useState(timeframe)
@@ -737,23 +742,9 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
     setTimeframeInput(timeframe)
   }, [timeframe])
 
-  // Save roadmap to Firestore on first load (authenticated users only)
   useEffect(() => {
-    if (user && data && !data.firestoreSaved) {
-      (async () => {
-        try {
-          await saveRoadmap(user.uid, roadmapId, {
-            ...data,
-            id: roadmapId,
-          })
-          // Mark as saved to prevent re-saving
-          data.firestoreSaved = true
-        } catch (error) {
-          console.error('Error saving roadmap:', error)
-        }
-      })()
-    }
-  }, [user, data, roadmapId])
+    if (savedRoadmapId) setRoadmapId(savedRoadmapId)
+  }, [savedRoadmapId])
 
   const handleTimeframeUpdate = async () => {
     if (!timeframeInput.trim() || timeframeInput === timeframe) {
@@ -1085,7 +1076,7 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 100, height: 5, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
               <div style={{
-                width: `${totalXP > 0 ? Math.round(earnedXP / totalXP * 100) : 0}%`,
+                width: `${totalXP > 0 ? Math.min(100, Math.max(0, Math.round((earnedXP / totalXP) * 100))) : 0}%`,
                 height: '100%', background: '#e52929', borderRadius: 3, transition: 'width 0.4s ease',
               }} />
             </div>
