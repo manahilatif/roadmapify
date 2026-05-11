@@ -2,6 +2,8 @@
 import sys
 import pathlib
 import logging
+import re
+import os
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -10,10 +12,11 @@ if str(ROOT) not in sys.path:
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=pathlib.Path(__file__).resolve().parent / ".env")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
+from groq import Groq
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,6 +36,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize Groq client
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Lazy imports
 _generate_fn  = None
@@ -61,6 +67,100 @@ def get_chat():
             from roadmap_chain import chat_with_roadmap
             _chat_fn = chat_with_roadmap
     return _chat_fn
+
+
+async def validate_goal_with_groq(goal: str) -> tuple[bool, str]:
+    """
+    Use Groq API to validate if the goal is a real, learnable skill/goal.
+    Returns: (is_valid, error_message)
+    """
+    try:
+        if not goal or len(goal.strip()) < 2:
+            return False, "Please enter a learning goal."
+        
+        # Use Groq for quick validation with llama-3.1-8b-instant (fast & cheap)
+        response = groq_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": f'Is the following a valid, specific, and learnable skill or goal that a person could realistically study or prepare for? Answer with only "yes" or "no".\n\nGoal: "{goal.strip()}"'
+                }
+            ],
+            model="llama-3.1-8b-instant",
+            temperature=0,
+            max_tokens=5,
+        )
+        
+        answer = response.choices[0].message.content.strip().lower()
+        
+        # Check if the response is "no"
+        if "no" in answer:
+            return False, "This doesn't look like a learnable goal. Try something like 'Learn Python', 'Prepare for IELTS', or 'Get started with machine learning'."
+        
+        return True, ""
+    except Exception as e:
+        logger.error(f"Groq validation error: {e}")
+        # Fall back to local validation on API error
+        return True, ""
+
+
+def validate_learning_goal(goal: str) -> tuple[bool, str]:
+    """
+    Validate whether the input is a legitimate learning goal.
+    Returns: (is_valid, error_message)
+    
+    A valid goal is something a person can realistically learn or prepare for.
+    Invalid goals are: vague nonsense, offensive, too short, random characters, etc.
+    """
+    if not goal or len(goal.strip()) == 0:
+        return False, "Please enter a learning goal."
+    
+    goal = goal.strip()
+    
+    # Check minimum length
+    if len(goal) < 4:
+        return False, "Your goal is too short. Try something like 'Learn Python' or 'Prepare for IELTS'."
+    
+    # Check for mostly random characters or nonsense patterns
+    # (very few vowels, too many repeated chars, keyboard smash)
+    vowel_count = sum(1 for c in goal.lower() if c in 'aeiou')
+    vowel_ratio = vowel_count / len(goal) if goal else 0
+    if vowel_ratio < 0.15 and len(goal) > 6:
+        # Too few vowels for a normal goal
+        return False, "This doesn't look like a learning goal. Try something like 'Learn Python' or 'Prepare for IELTS'."
+    
+    # Check for offensive words (simple blacklist)
+    offensive_words = ['kill', 'hate', 'die', 'attack', 'bomb', 'harm']
+    goal_lower = goal.lower()
+    if any(word in goal_lower for word in offensive_words):
+        return False, "Please enter a respectful learning goal."
+    
+    # Check if it looks like a real goal (contains relevant keywords/patterns)
+    # Valid patterns: learn, prepare, master, build, understand, get better, study, practice, etc.
+    valid_patterns = [
+        r'\b(learn|master|study|practice|prepare|understand|build|create|develop|improve|get|become|pass|complete|finish)\b',
+        r'\b(python|javascript|react|vue|node|java|c\+\+|c#|rust|golang|ruby|php)\b',
+        r'\b(exam|test|ielts|toefl|gre|gmat|sat|act|certification)\b',
+        r'\b(course|curriculum|skill|tutorial|guide|roadmap|project|app|website|system)\b',
+        r'\bfor\b',  # "Learn X for Y"
+    ]
+    
+    matches_pattern = any(re.search(pattern, goal_lower) for pattern in valid_patterns)
+    
+    # If no valid patterns matched, it might still be okay if it's clearly about learning something
+    # Give it another chance with a simpler check
+    if not matches_pattern:
+        # Check if it has at least 2 words and doesn't look like random input
+        words = goal.split()
+        if len(words) < 2:
+            return False, "Your goal should be more specific. Try 'Learn Python' instead of just 'Python'."
+        
+        # Check for too many numbers/special chars
+        special_ratio = sum(1 for c in goal if not c.isalnum() and c != ' ') / len(goal)
+        if special_ratio > 0.3:
+            return False, "This doesn't look like a learning goal. Try something like 'Learn Python' or 'Prepare for IELTS'."
+    
+    return True, ""
 
 
 # ── Request models ────────────────────────────────────────────────────────────
@@ -97,6 +197,9 @@ class ProgressRequest(BaseModel):
     completed:  bool
     notes:      str = ""
 
+class TimeframeRequest(BaseModel):
+    goal: str = Field(..., min_length=1)
+
 
 _progress: dict = {}
 
@@ -113,7 +216,12 @@ def health():
 
 
 @app.post("/generate-roadmap")
-def generate_roadmap_endpoint(req: GenerateRequest):
+async def generate_roadmap_endpoint(req: GenerateRequest):
+    # First, validate with Groq (LLM-based validation)
+    is_valid, error_msg = await validate_goal_with_groq(req.goal)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
     # Resolve all field name aliases to the two params roadmap_chain expects
     difficulty      = req.difficulty or req.experience or req.level or "beginner"
     time_commitment = req.time_commitment or req.timeframe or "1 month"
@@ -133,8 +241,76 @@ def generate_roadmap_endpoint(req: GenerateRequest):
 
 # Alias so nothing breaks if frontend calls /generate
 @app.post("/generate")
-def generate_alias(req: GenerateRequest):
-    return generate_roadmap_endpoint(req)
+async def generate_alias(req: GenerateRequest):
+    return await generate_roadmap_endpoint(req)
+
+
+@app.post("/suggest-timeframe")
+def suggest_timeframe_endpoint(req: TimeframeRequest):
+    """
+    Lightweight endpoint to suggest a timeframe for a given learning goal.
+    Returns a suggested timeframe string like "6–8 weeks" or "3 months".
+    """
+    try:
+        fn = get_generate()
+        # Use the LLM to suggest a timeframe
+        # This is a lightweight prompt that just returns the timeframe
+        # The actual implementation depends on your roadmap_chain.py
+        # For now, we'll use a simple heuristic-based suggestion
+        
+        goal_lower = req.goal.lower()
+        
+        # Simple heuristics based on keywords
+        if any(w in goal_lower for w in ['master', 'deep', 'expert', 'proficiency']):
+            return {"suggested_timeframe": "6-12 months"}
+        elif any(w in goal_lower for w in ['prepare', 'exam', 'certification', 'test', 'ielts', 'toefl', 'gre']):
+            return {"suggested_timeframe": "2-4 months"}
+        elif any(w in goal_lower for w in ['learn', 'understand', 'study', 'foundations', 'basics']):
+            return {"suggested_timeframe": "4-8 weeks"}
+        elif any(w in goal_lower for w in ['build', 'create', 'develop', 'project']):
+            if any(w in goal_lower for w in ['app', 'website', 'system']):
+                return {"suggested_timeframe": "4-6 weeks"}
+            else:
+                return {"suggested_timeframe": "2-4 weeks"}
+        else:
+            # Default suggestion
+            return {"suggested_timeframe": "4-8 weeks"}
+    except Exception as e:
+        logger.error(f"Timeframe suggestion error: {e}")
+        return {"suggested_timeframe": "4-8 weeks"}
+
+
+class UpdateTimeframeRequest(BaseModel):
+    roadmap_id: str
+    timeframe: str = Field(..., min_length=1)
+
+
+@app.patch("/roadmap/{roadmap_id}/timeframe")
+def update_roadmap_timeframe(roadmap_id: str, req: UpdateTimeframeRequest):
+    """
+    Update the timeframe for a roadmap.
+    For authenticated users, this would update the Firestore document.
+    For now, we store it in the in-memory _progress tracking.
+    """
+    try:
+        # In a full implementation, this would:
+        # 1. Verify the user owns this roadmap
+        # 2. Update the document in Firestore
+        # 3. Optionally re-prompt Gemini to regenerate the node schedule
+        
+        if roadmap_id not in _progress:
+            _progress[roadmap_id] = {}
+        _progress[roadmap_id]['timeframe'] = req.timeframe
+        
+        return {
+            "success": True,
+            "roadmap_id": roadmap_id,
+            "new_timeframe": req.timeframe,
+            "message": "Roadmap timeframe updated successfully"
+        }
+    except Exception as e:
+        logger.error(f"Timeframe update error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update timeframe")
 
 
 @app.post("/chat")

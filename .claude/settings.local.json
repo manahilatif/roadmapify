@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"d:\\\\Documents\\\\FAST\\\\6th sem\\\\ai\\\\project\\\\roadmapify\" -Recurse -File)",
+      "Bash(Select-Object FullName)"
+    ]
+  }
+}
