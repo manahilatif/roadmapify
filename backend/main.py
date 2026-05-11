@@ -12,7 +12,7 @@ load_dotenv(dotenv_path=pathlib.Path(__file__).resolve().parent / ".env")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +66,8 @@ def get_chat():
 # ── Request models ────────────────────────────────────────────────────────────
 
 class GenerateRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     goal:            str = Field(..., min_length=1)
     # Accept every field name variant the frontend might send
     difficulty:      Optional[str] = "beginner"
@@ -76,6 +78,7 @@ class GenerateRequest(BaseModel):
     domain:          Optional[str] = "general"
     hours_per_week:  Optional[int] = 10
     learning_style:  Optional[str] = "mixed"
+    context_extra:   Optional[str] = None
 
 class ChatMessage(BaseModel):
     role:    str

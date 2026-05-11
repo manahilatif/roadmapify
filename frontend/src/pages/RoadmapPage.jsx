@@ -1,6 +1,8 @@
 // src/pages/RoadmapPage.jsx
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import ChatButton from '../components/ChatButton.jsx'
+import { useAuth } from '../context/AuthContext'
+import { updateUserRoadmap } from '../services/roadmapsFirestore'
 
 /* ── Normalise any backend shape → flat node list ────────────────────────────*/
 function normalise(data) {
@@ -551,14 +553,54 @@ function XPFloat({ xp, x, y }) {
 }
 
 /* ── Main page ────────────────────────────────────────────────────────────────*/
-export default function RoadmapPage({ data, onBack }) {
+function buildSnapshot(data, nodes, earnedXP, streak) {
+  return {
+    ...data,
+    nodes,
+    earnedXP,
+    streak,
+    topic: data?.topic,
+  }
+}
+
+export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onProgressChange }) {
+  const { user } = useAuth()
   const [nodes,    setNodes]    = useState(() => normalise(data))
   const [selected, setSelected] = useState(null)
-  const [earnedXP, setEarnedXP] = useState(0)
-  const [streak,   setStreak]   = useState(data?.streak || 8)
+  const [earnedXP, setEarnedXP] = useState(data?.earnedXP ?? 0)
+  const [streak,   setStreak]   = useState(data?.streak ?? 8)
   const [confetti, setConfetti] = useState(null)
   const [xpFloat,  setXpFloat]  = useState(null)
   const [activeResource, setActiveResource] = useState(null)
+
+  /* Avoid effect dependency on `data` (parent updates would retrigger saves / loops). */
+  const dataRef = useRef(data)
+  dataRef.current = data
+
+  const roadmapForChat = useMemo(() => ({ ...data, nodes }), [data, nodes])
+
+  /* Keep App’s roadmapData in sync — pehli dafa generate ke baad bhi complete levels yahi object reflect karein */
+  useEffect(() => {
+    if (!onProgressChange) return
+    const t = setTimeout(() => {
+      onProgressChange(buildSnapshot(dataRef.current, nodes, earnedXP, streak))
+    }, 400)
+    return () => clearTimeout(t)
+  }, [nodes, earnedXP, streak, onProgressChange])
+
+  /* Firestore: debounced save (savedRoadmapId aane par bhi yahi effect chalega — pehle complete kiye hue nodes save ho jate hain) */
+  useEffect(() => {
+    if (!user?.uid || !savedRoadmapId) return
+    const id = savedRoadmapId
+    const timer = setTimeout(() => {
+      const snapshot = buildSnapshot(dataRef.current, nodes, earnedXP, streak)
+      updateUserRoadmap(user.uid, id, {
+        topic: snapshot.topic || snapshot.title || snapshot.goal || 'My roadmap',
+        roadmapData: snapshot,
+      }).catch((err) => console.error('Autosave failed:', err))
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [nodes, earnedXP, streak, user?.uid, savedRoadmapId])
 
   const totalXP    = data?.total_xp || nodes.reduce((s, n) => s + (n.xp_reward || 100), 0)
   const doneCount  = nodes.filter(n => n.status === 'done').length
@@ -573,8 +615,9 @@ export default function RoadmapPage({ data, onBack }) {
   const pos   = layoutNodes(nodes)
   const conns = buildConnectors(nodes, pos)
 
-  const maxX = Math.max(...Object.values(pos).map(p => p.x), 0) + 80
-  const maxY = Math.max(...Object.values(pos).map(p => p.y), 0) + 80
+  const coordList = Object.values(pos)
+  const maxX = (coordList.length ? Math.max(...coordList.map((p) => p.x), 0) : 185) + 80
+  const maxY = (coordList.length ? Math.max(...coordList.map((p) => p.y), 0) : 120) + 80
   const svgW = Math.max(maxX + 60, 420)
   const svgH = allDone ? maxY + 180 : maxY + 40
 
@@ -634,6 +677,32 @@ export default function RoadmapPage({ data, onBack }) {
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px }
       `}</style>
 
+      {nodes.length === 0 && (
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: 32, textAlign: 'center', gap: 16,
+        }}>
+          <div style={{ fontSize: 40 }}>⚠️</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>This roadmap has no steps yet</div>
+          <div style={{ color: 'rgba(255,255,255,0.45)', maxWidth: 380, lineHeight: 1.6 }}>
+            The server returned data we could not map to nodes (check the browser console and that{' '}
+            <code style={{ color: 'rgba(255,255,255,0.6)' }}>VITE_API_URL</code>{' '}
+            points at your running API). Try generating again or go home.
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              marginTop: 8, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+              color: '#fff', padding: '10px 22px', borderRadius: 10, cursor: 'pointer', fontSize: 14,
+            }}
+          >
+            ← Home
+          </button>
+        </div>
+      )}
+
+      {nodes.length > 0 && (<>
       {/* ── TOP INFO BAR ── */}
       <div style={{
         position: 'relative', zIndex: 50,
@@ -651,6 +720,9 @@ export default function RoadmapPage({ data, onBack }) {
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', marginTop: 4 }}>
             {doneCount}/{nodes.length} nodes · personalized journey
+            {savedRoadmapId && user?.uid && (
+              <span style={{ color: 'rgba(16,185,129,0.75)' }}> · Auto-saved</span>
+            )}
           </div>
         </div>
 
@@ -789,10 +861,11 @@ export default function RoadmapPage({ data, onBack }) {
       {xpFloat  && <XPFloat  key={xpFloat.key}  xp={xpFloat.xp} x={xpFloat.x} y={xpFloat.y} />}
 
       <ChatButton
-        roadmap={data}
+        roadmap={roadmapForChat}
         currentModule={selected}
         currentResource={activeResource}
       />
+      </>)}
     </div>
   )
 }

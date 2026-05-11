@@ -250,7 +250,7 @@ function FeatureCard({ icon, title, desc, delay }) {
   )
 }
 
-export default function LandingPage({ onStart, onStartWithExample }) {
+export default function LandingPage({ onStart, onStartWithExample, onMyRoadmaps }) {
   const [showExamples, setShowExamples] = useState(false)
 
   const handleUseExample = (ex) => {
@@ -266,7 +266,7 @@ export default function LandingPage({ onStart, onStartWithExample }) {
 
   return (
     <div className="noise" style={{ minHeight: '100vh', background: 'var(--black)' }}>
-      <Navbar onStart={onStart} />
+      <Navbar onStart={onStart} onMyRoadmaps={onMyRoadmaps} />
 
       {/* Hero */}
       <section style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', paddingTop: '60px', position: 'relative', overflow: 'hidden' }}>

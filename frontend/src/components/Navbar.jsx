@@ -4,7 +4,7 @@ import Logo from './Logo.jsx'
 import SignInModal from './SignInModal.jsx'
 import { useAuth } from '../context/AuthContext'
 
-export default function Navbar({ onStart, onBack, showBack = false }) {
+export default function Navbar({ onStart, onBack, showBack = false, onMyRoadmaps }) {
   const { user, logout } = useAuth()
   const [showModal,    setShowModal]    = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
@@ -75,6 +75,22 @@ export default function Navbar({ onStart, onBack, showBack = false }) {
                       </div>
                     </div>
                     <div style={{ height: '1px', background: 'var(--border)', margin: '2px 0 6px' }} />
+                    {onMyRoadmaps && (
+                      <button
+                        onClick={() => { onMyRoadmaps(); setShowDropdown(false) }}
+                        style={{
+                          width: '100%', background: 'transparent', border: 'none',
+                          padding: '8px 12px', borderRadius: '8px', cursor: 'pointer',
+                          textAlign: 'left', fontSize: '0.8125rem', color: 'var(--ts)',
+                          fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '7px',
+                          transition: 'background 0.12s, color 0.12s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'var(--s2)'; e.currentTarget.style.color = 'var(--tp)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ts)' }}
+                      >
+                        <span style={{ fontSize: '13px' }}>🗺️</span> My roadmaps
+                      </button>
+                    )}
                     <button
                       onClick={() => { logout(); setShowDropdown(false) }}
                       style={{

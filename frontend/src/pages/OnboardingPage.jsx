@@ -1,6 +1,7 @@
 // src/pages/OnboardingPage.jsx
 import { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar.jsx'
+import { useAuth } from '../context/AuthContext'
 
 // ── Timeframe fallbacks per goal type ─────────────────────────────────────────
 const TIMEFRAME_DEFAULTS = {
@@ -74,6 +75,14 @@ const BASE_STEPS = [
 
 const DEFAULT_ANSWERS = { topic: '', level: '', goal: '', hoursPerWeek: 10, weeks: '' }
 
+function isValidRoadmapPayload(data) {
+  if (!data || typeof data !== 'object') return false
+  const { nodes, modules, stages } = data
+  return (Array.isArray(nodes) && nodes.length > 0)
+    || (Array.isArray(modules) && modules.length > 0)
+    || (Array.isArray(stages) && stages.length > 0)
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function Dots({ step, total }) {
@@ -122,7 +131,8 @@ function Choice({ c, selected, onSelect }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function OnboardingPage({ onGenerate, onBack, prefill }) {
+export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadmaps }) {
+  const { user } = useAuth()
   const [steps, setSteps]           = useState(BASE_STEPS)
   const [step, setStep]             = useState(prefill ? BASE_STEPS.length - 1 : 0)
   const [loading, setLoading]       = useState(false)
@@ -177,7 +187,13 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
     // Final Submission
     setLoading(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/generate-roadmap`, {
+      const baseUrl = import.meta.env.VITE_API_URL
+      if (!baseUrl) {
+        console.error('VITE_API_URL is not set')
+        onGenerate(fallback(answers), { topic: answers.topic })
+        return
+      }
+      const res = await fetch(`${baseUrl}/generate-roadmap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -189,11 +205,16 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
           context_extra: `Target completion: ${answers.weeks}`,
         }),
       })
-      const data = await res.json()
-      onGenerate(data)
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !isValidRoadmapPayload(data)) {
+        if (!res.ok) console.error('Generate roadmap HTTP', res.status, data)
+        onGenerate(fallback(answers), { topic: answers.topic })
+      } else {
+        onGenerate(data, { topic: answers.topic })
+      }
     } catch (err) {
       console.error("Generation error:", err)
-      onGenerate(fallback(answers))
+      onGenerate(fallback(answers), { topic: answers.topic })
     } finally {
       setLoading(false)
     }
@@ -212,7 +233,7 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
-      <Navbar onBack={onBack} showBack />
+      <Navbar onBack={onBack} showBack onMyRoadmaps={user ? onMyRoadmaps : undefined} />
 
       <div style={{ width: '100%', maxWidth: '500px' }}>
         <Dots step={step} total={steps.length} />
