@@ -126,6 +126,8 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
   const [steps, setSteps]           = useState(BASE_STEPS)
   const [step, setStep]             = useState(prefill ? BASE_STEPS.length - 1 : 0)
   const [loading, setLoading]       = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
+  const [error, setError]           = useState('')
   const [classifying, setClassifying] = useState(false)
   const [answers, setAnswers]       = useState(
     prefill ? { ...DEFAULT_ANSWERS, ...prefill } : DEFAULT_ANSWERS
@@ -161,6 +163,39 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
     }
   }
 
+  const suggestTimeframe = async () => {
+    if (!answers.topic) {
+      setError('Please enter your goal first.')
+      return
+    }
+    setError('')
+    setSuggesting(true)
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/suggest-timeframe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal: answers.topic })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        // Find the choice that matches or is closest to the suggestion
+        const suggested = data.suggested_timeframe
+        const cur = steps.find(s => s.id === 'weeks')
+        if (cur) {
+          // Try to find a matching choice, or just select the first reasonable one
+          const matchChoice = cur.choices.find(c => c.l.includes(suggested.split('-')[0]) || c.l.includes(suggested.split('–')[0]))
+          if (matchChoice) {
+            setAnswers(a => ({ ...a, weeks: matchChoice.v }))
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error suggesting timeframe:', err)
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   const cur    = steps[step]
   const val    = answers[cur.field]
   const canNext = cur.type === 'text'
@@ -175,6 +210,7 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
     if (step < steps.length - 1) { setStep(s => s + 1); return }
 
     // Final Submission
+    setError('')
     setLoading(true)
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/generate-roadmap`, {
@@ -183,18 +219,27 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
         body: JSON.stringify({
           goal: answers.topic,
           domain: answers.goal || "general",
-          level: answers.level || 'beginner', // Fixed: backend expects 'level'
+          level: answers.level || 'beginner',
           hours_per_week: answers.hoursPerWeek,
           learning_style: "mixed",
           context_extra: `Target completion: ${answers.weeks}`,
         }),
       })
+
+      if (!res.ok) {
+        // Handle validation errors (400 status)
+        const errData = await res.json()
+        const errorMessage = errData.detail || "Failed to generate roadmap. Please try again."
+        setError(errorMessage)
+        setLoading(false)
+        return
+      }
+
       const data = await res.json()
       onGenerate(data)
     } catch (err) {
       console.error("Generation error:", err)
-      onGenerate(fallback(answers))
-    } finally {
+      setError('Network error. Make sure the backend is running.')
       setLoading(false)
     }
   }
@@ -223,6 +268,16 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
         <h2 style={{ fontSize: '1.8rem', textAlign: 'center', marginBottom: '10px' }}>{cur.question}</h2>
         <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontSize: '0.9rem', marginBottom: '32px' }}>{cur.sub}</p>
 
+        {error && (
+          <div style={{
+            background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', 
+            padding: '14px 16px', marginBottom: '24px', color: 'rgba(239,68,68,0.9)', fontSize: '0.9rem', lineHeight: '1.5'
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: '4px' }}>⚠ Invalid goal</div>
+            <div>{error}</div>
+          </div>
+        )}
+
         <div style={{ marginBottom: '32px' }}>
           {cur.type === 'text' && (
             <input
@@ -235,10 +290,30 @@ export default function OnboardingPage({ onGenerate, onBack, prefill }) {
           )}
 
           {cur.type === 'choice' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {cur.choices.map(c => (
-                <Choice key={c.v} c={c} selected={answers[cur.field] === c.v} onSelect={v => setAnswers(a => ({ ...a, [cur.field]: v }))} />
-              ))}
+            <div>
+              {cur.id === 'weeks' && (
+                <button
+                  onClick={suggestTimeframe}
+                  disabled={suggesting || !answers.topic}
+                  style={{
+                    width: '100%', marginBottom: '12px', padding: '12px',
+                    background: suggesting ? 'rgba(220,38,38,0.15)' : 'rgba(220,38,38,0.1)',
+                    border: '1px solid rgba(220,38,38,0.2)',
+                    color: suggesting ? 'rgba(220,38,38,0.8)' : 'rgba(220,38,38,0.7)',
+                    borderRadius: '12px', cursor: suggesting ? 'wait' : 'pointer',
+                    fontSize: '0.9rem', fontWeight: 600, transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => !suggesting && (e.target.style.background = 'rgba(220,38,38,0.15)')}
+                  onMouseLeave={(e) => !suggesting && (e.target.style.background = 'rgba(220,38,38,0.1)')}
+                >
+                  {suggesting ? '✓ Suggesting...' : '💡 Suggest for me'}
+                </button>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {cur.choices.map(c => (
+                  <Choice key={c.v} c={c} selected={answers[cur.field] === c.v} onSelect={v => setAnswers(a => ({ ...a, [cur.field]: v }))} />
+                ))}
+              </div>
             </div>
           )}
 

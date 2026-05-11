@@ -43,13 +43,17 @@ SYSTEM_PROMPT = """You are Roadmapify. Return a complete learning roadmap as a J
 Context: {context}
 
 RULES:
-1. Output EXACTLY 8 nodes: node_1, node_2, node_3, node_4, node_5, node_6, node_7, bonus_1
+1. Output EXACTLY 9 nodes: node_1, node_2, node_3, checkpoint_1, node_4, node_5, node_6, node_7, bonus_1
 2. node_1 status "active"; all others status "locked"
-3. node_1 through node_7 type "main"; bonus_1 type "bonus"
-4. Each title must be 3-7 words, SPECIFIC to the learner's goal.
+3. node_1 through node_7 type "main"; checkpoint_1 type "checkpoint"; bonus_1 type "bonus"
+4. **IMPORTANT**: After every 3-4 learning nodes, insert a checkpoint node to reinforce learning.
+5. Checkpoint nodes must include a "quiz_questions" array with 3-5 multiple-choice questions relevant to the preceding nodes.
+   Each question: {{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0}}
+6. Each title must be 3-7 words, SPECIFIC to the learner's goal.
    FORBIDDEN titles: "Getting Started", "Foundation", "Learn basics", "Core Skills", "Introduction", "Overview"
-5. Each main node: steps (3-5 concrete how-to instructions) and resources (2 real https:// URLs)
-6. Do NOT use "..." anywhere. Write all 8 nodes in full.
+7. Each main node: steps (3-5 concrete how-to instructions) and resources (2 real https:// URLs)
+8. Checkpoint nodes: only need title, description, and quiz_questions. No steps or resources required.
+9. Do NOT use "..." anywhere. Write all 9 nodes in full.
 
 Real resource URLs:
 https://www.ielts.org | https://ieltsliz.com | https://www.ielts-simon.com
@@ -110,6 +114,21 @@ Template — replace every [PLACEHOLDER] with real goal-specific content:
       "resources": [
         {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
         {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
+      ]
+    }},
+    {{
+      "id": "checkpoint_1",
+      "title": "Quiz: Review nodes 1-3",
+      "description": "Test your understanding of the first three topics.",
+      "type": "checkpoint",
+      "emoji": "📝",
+      "duration_label": "Week 3-4",
+      "xp_reward": 50,
+      "status": "locked",
+      "quiz_questions": [
+        {{"question": "[Question about node 1, 2, or 3 content]", "options": ["[Option A]", "[Option B]", "[Option C]", "[Option D]"], "correct_index": 0}},
+        {{"question": "[Another question]", "options": ["[Option A]", "[Option B]", "[Option C]", "[Option D]"], "correct_index": 1}},
+        {{"question": "[Another question]", "options": ["[Option A]", "[Option B]", "[Option C]", "[Option D]"], "correct_index": 2}}
       ]
     }},
     {{
@@ -191,7 +210,9 @@ Level: {difficulty}
 Timeframe: {time_commitment}
 
 Replace every [PLACEHOLDER] in the template with real, specific content for this exact goal.
-Output all 8 nodes (node_1 through node_7 plus bonus_1). Do not skip any node."""
+Output all 9 nodes (node_1 through node_7, plus checkpoint_1 after node_3, and bonus_1). 
+Include 3-5 multiple-choice quiz questions in checkpoint_1 that test understanding of the first 3 nodes.
+Do not skip any node."""
 
 
 # ── Local fallback (used when LLM fails both attempts) ────────────────────────
@@ -201,7 +222,7 @@ def _build_fallback(goal: str) -> dict:
     return {
         "title":       f"{g} Roadmap",
         "description": "A step-by-step learning path",
-        "total_xp":    850,
+        "total_xp":    900,
         "nodes": [
             {
                 "id": "node_1",
@@ -252,6 +273,18 @@ def _build_fallback(goal: str) -> dict:
                 "resources": [
                     {"label": "Kaggle Learn", "url": "https://www.kaggle.com/learn", "tip": "Hands-on micro-courses"},
                     {"label": "freeCodeCamp", "url": "https://www.freecodecamp.org/learn", "tip": "Free exercises and projects"},
+                ],
+            },
+            {
+                "id": "checkpoint_1",
+                "title": f"Quiz: Understand {g} basics",
+                "description": "Test your understanding of the foundation topics.",
+                "type": "checkpoint", "emoji": "📝",
+                "duration_label": "Week 3", "xp_reward": 50, "status": "locked",
+                "quiz_questions": [
+                    {"question": f"What is the first step when learning {g}?", "options": ["Research and understand scope", "Buy expensive tools", "Jump into advanced topics", "Skip to practice tests"], "correct_index": 0},
+                    {"question": "Why is setting up your environment important?", "options": ["To look professional", "To have the right tools and accounts ready", "It's not really important", "Only for experts"], "correct_index": 1},
+                    {"question": "What should you do after your first practice session?", "options": ["Immediately try harder problems", "Review mistakes and identify weak areas", "Give up if you struggle", "Wait a week before practicing again"], "correct_index": 1},
                 ],
             },
             {

@@ -6,6 +6,8 @@ import {
   updateProfile,
 } from 'firebase/auth'
 import { auth } from '../firebase'
+import { useAuth } from '../context/AuthContext'
+import { getUserProfile } from '../lib/firestore'
 
 const friendlyError = (code) => {
   switch (code) {
@@ -21,6 +23,7 @@ const friendlyError = (code) => {
 }
 
 export default function SignInModal({ onClose }) {
+  const { optimisticSetUser } = useAuth()
   const [mode,    setMode]    = useState('signin') // 'signin' | 'signup'
   const [name,    setName]    = useState('')
   const [email,   setEmail]   = useState('')
@@ -34,16 +37,28 @@ export default function SignInModal({ onClose }) {
     if (mode === 'signup' && !name.trim()) { setError('Please enter your name.'); return }
     setLoading(true)
     try {
+      let firebaseUser
       if (mode === 'signup') {
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), pw)
         await updateProfile(cred.user, { displayName: name.trim() })
+        firebaseUser = cred.user
+        // Create Firestore profile immediately after sign-up
+        try {
+          await getUserProfile(firebaseUser.uid)
+        } catch (err) {
+          console.error('Error creating Firestore profile:', err)
+          // Non-blocking — still allow user to proceed
+        }
       } else {
-        await signInWithEmailAndPassword(auth, email.trim(), pw)
+        const cred = await signInWithEmailAndPassword(auth, email.trim(), pw)
+        firebaseUser = cred.user
       }
+      
+      // Optimistic update — show UI immediately without waiting for onAuthStateChanged
+      optimisticSetUser(firebaseUser)
       onClose()
     } catch (e) {
       setError(friendlyError(e.code))
-    } finally {
       setLoading(false)
     }
   }
