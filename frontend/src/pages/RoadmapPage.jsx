@@ -2,10 +2,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import ChatButton from '../components/ChatButton.jsx'
 import { useAuth } from '../context/AuthContext'
-import { updateUserRoadmap } from '../services/roadmapsFirestore'
-import { useState, useCallback, useEffect } from 'react'
-import { useAuth } from '../context/AuthContext.jsx'
-import ChatButton from '../components/ChatButton.jsx'
 import { saveRoadmap, updateNodeCompletion } from '../lib/firestore'
 
 /* ── Normalise any backend shape → flat node list ────────────────────────────*/
@@ -715,16 +711,10 @@ function buildSnapshot(data, nodes, earnedXP, streak) {
 }
 
 export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onProgressChange }) {
-  const { user } = useAuth()
-  const [nodes,    setNodes]    = useState(() => normalise(data))
-  const [selected, setSelected] = useState(null)
-  const [earnedXP, setEarnedXP] = useState(data?.earnedXP ?? 0)
-  const [streak,   setStreak]   = useState(data?.streak ?? 8)
-export default function RoadmapPage({ data, onBack }) {
   const { user, profile } = useAuth()
   const [nodes,    setNodes]    = useState(() => normalise(data))
   const [selected, setSelected] = useState(null)
-  const [earnedXP, setEarnedXP] = useState(0)
+  const [earnedXP, setEarnedXP] = useState(data?.earnedXP ?? 0)
   const [streak,   setStreak]   = useState(profile?.streak || 0)
   const [confetti, setConfetti] = useState(null)
   const [xpFloat,  setXpFloat]  = useState(null)
@@ -995,6 +985,8 @@ export default function RoadmapPage({ data, onBack }) {
             {doneCount}/{nodes.length} nodes · personalized journey
             {savedRoadmapId && user?.uid && (
               <span style={{ color: 'rgba(16,185,129,0.75)' }}> · Auto-saved</span>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.25 }}>
               {title}

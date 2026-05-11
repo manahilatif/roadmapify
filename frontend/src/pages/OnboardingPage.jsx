@@ -252,21 +252,6 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
       console.error("Generation error:", err)
       onGenerate(fallback(answers), { topic: answers.topic })
     } finally {
-
-      if (!res.ok) {
-        // Handle validation errors (400 status)
-        const errData = await res.json()
-        const errorMessage = errData.detail || "Failed to generate roadmap. Please try again."
-        setError(errorMessage)
-        setLoading(false)
-        return
-      }
-
-      const data = await res.json()
-      onGenerate(data)
-    } catch (err) {
-      console.error("Generation error:", err)
-      setError('Network error. Make sure the backend is running.')
       setLoading(false)
     }
   }
