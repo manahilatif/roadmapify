@@ -88,7 +88,7 @@ export default function Navbar({ onStart, onBack, showBack = false, onMyRoadmaps
                         onMouseEnter={e => { e.currentTarget.style.background = 'var(--s2)'; e.currentTarget.style.color = 'var(--tp)' }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ts)' }}
                       >
-                        <span style={{ fontSize: '13px' }}>🗺️</span> My roadmaps
+                        <span style={{ fontSize: '13px' }}>�️</span> My roadmaps
                       </button>
                     )}
                     <button

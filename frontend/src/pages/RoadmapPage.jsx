@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import ChatButton from '../components/ChatButton.jsx'
 import { useAuth } from '../context/AuthContext'
-import { saveRoadmap, updateNodeCompletion } from '../lib/firestore'
+import { saveRoadmap, updateNodeCompletion, updateUserStreak } from '../lib/firestore'
 
 /* ── Normalise any backend shape → flat node list ────────────────────────────*/
 function normalise(data) {
@@ -862,7 +862,18 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
     setNodes(next)
     const xpReward = node.xp_reward || 100
     setEarnedXP(p => p + xpReward)
-    setStreak(s => s + 1)
+    
+    // Update streak - save to both local state and Firestore
+    setStreak(prevStreak => {
+      const newStreak = prevStreak + 1
+      // Save updated streak to Firestore (if user is authenticated)
+      if (user) {
+        updateUserStreak(user.uid, newStreak).catch(error => {
+          console.error('Error updating streak:', error)
+        })
+      }
+      return newStreak
+    })
 
     // Save node completion to Firestore (if user is authenticated)
     if (user) {
@@ -895,7 +906,19 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
 
     setNodes(next)
     setEarnedXP(p => p + totalXP)
-    setStreak(s => s + 1)
+    
+    // Update streak - save to both local state and Firestore
+    setStreak(prevStreak => {
+      const newStreak = prevStreak + 1
+      // Save updated streak to Firestore (if user is authenticated)
+      if (user) {
+        updateUserStreak(user.uid, newStreak).catch(error => {
+          console.error('Error updating streak:', error)
+        })
+      }
+      return newStreak
+    })
+    
     setQuizNode(null)
 
     // Save to Firestore
@@ -978,15 +1001,6 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
         transition: 'padding-right 0.22s ease',
       }}>
         <div style={{ minWidth: 0, flex: 1, marginRight: 24 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.25 }}>
-            {title}
-          </div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', marginTop: 4 }}>
-            {doneCount}/{nodes.length} nodes · personalized journey
-            {savedRoadmapId && user?.uid && (
-              <span style={{ color: 'rgba(16,185,129,0.75)' }}> · Auto-saved</span>
-            )}
-          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.25 }}>
               {title}
@@ -1051,6 +1065,9 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
           ) : (
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', marginTop: 4 }}>
               {doneCount}/{nodes.length} nodes {timeframe ? `· ${timeframe}` : '· personalized journey'}
+              {savedRoadmapId && user?.uid && (
+                <span style={{ color: 'rgba(16,185,129,0.75)' }}> · Auto-saved</span>
+              )}
             </div>
           )}
         </div>

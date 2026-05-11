@@ -248,33 +248,42 @@ async def generate_alias(req: GenerateRequest):
 @app.post("/suggest-timeframe")
 def suggest_timeframe_endpoint(req: TimeframeRequest):
     """
-    Lightweight endpoint to suggest a timeframe for a given learning goal.
-    Returns a suggested timeframe string like "6–8 weeks" or "3 months".
+    Use Groq LLM to dynamically suggest a realistic timeframe for the given goal.
+    Returns a timeframe string that accounts for the complexity and nature of the goal.
     """
     try:
-        fn = get_generate()
-        # Use the LLM to suggest a timeframe
-        # This is a lightweight prompt that just returns the timeframe
-        # The actual implementation depends on your roadmap_chain.py
-        # For now, we'll use a simple heuristic-based suggestion
-        
-        goal_lower = req.goal.lower()
-        
-        # Simple heuristics based on keywords
-        if any(w in goal_lower for w in ['master', 'deep', 'expert', 'proficiency']):
-            return {"suggested_timeframe": "6-12 months"}
-        elif any(w in goal_lower for w in ['prepare', 'exam', 'certification', 'test', 'ielts', 'toefl', 'gre']):
-            return {"suggested_timeframe": "2-4 months"}
-        elif any(w in goal_lower for w in ['learn', 'understand', 'study', 'foundations', 'basics']):
+        goal = req.goal.strip()
+        if not goal:
             return {"suggested_timeframe": "4-8 weeks"}
-        elif any(w in goal_lower for w in ['build', 'create', 'develop', 'project']):
-            if any(w in goal_lower for w in ['app', 'website', 'system']):
-                return {"suggested_timeframe": "4-6 weeks"}
-            else:
-                return {"suggested_timeframe": "2-4 weeks"}
-        else:
-            # Default suggestion
+        
+        # Use Groq to generate a dynamic timeframe based on the goal
+        response = groq_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Estimate a realistic learning or completion timeframe for this specific goal.
+Consider:
+- If it's a quick task (cake baking, short article), suggest hours or days
+- If it's a skill to learn (language, programming), suggest weeks or months
+- If it's mastery/deep expertise, suggest months or years
+
+Goal: "{goal}"
+
+Respond with ONLY a timeframe string like "2-3 hours", "1-2 days", "2-4 weeks", "2-3 months", "6-12 months", etc.
+Be specific to the goal, not generic. Do not explain, just the timeframe."""
+                }
+            ],
+            model="llama-3.1-8b-instant",
+            temperature=0.5,
+            max_tokens=20,
+        )
+        
+        timeframe = response.choices[0].message.content.strip()
+        # Basic validation - if response doesn't look like a timeframe, use default
+        if not timeframe or len(timeframe) > 50:
             return {"suggested_timeframe": "4-8 weeks"}
+        
+        return {"suggested_timeframe": timeframe}
     except Exception as e:
         logger.error(f"Timeframe suggestion error: {e}")
         return {"suggested_timeframe": "4-8 weeks"}
