@@ -60,12 +60,6 @@ function AppContent() {
     setRoadmap(enriched)
     navigate('roadmap')
 
-<<<<<<< Updated upstream
-    if (user?.uid) {
-      createUserRoadmap(user.uid, {
-        topic: enriched.topic || enriched.title || 'My roadmap',
-        roadmapData: enriched,
-=======
     // Only save to Firestore if the data has a valid title and nodes
     if (user?.uid && enriched.title && enriched.title.trim() && Array.isArray(enriched.nodes) && enriched.nodes.length > 0) {
       queueMicrotask(() => {
@@ -73,12 +67,9 @@ function AppContent() {
           topic: enriched.topic || enriched.title || 'My roadmap',
           roadmapData: enriched,
         })
-          .then((id) => setSavedRoadmapId(id))
+          .then((docId) => setSavedRoadmapId(docId))
           .catch((err) => console.error('Could not save roadmap to cloud:', err))
->>>>>>> Stashed changes
       })
-        .then((docId) => setSavedRoadmapId(docId))
-        .catch((err) => console.error('Could not save roadmap to cloud:', err))
     }
   }
 
