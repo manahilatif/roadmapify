@@ -285,44 +285,40 @@ async def regenerate_roadmap_endpoint(req: GenerateRequest):
 def suggest_timeframe_endpoint(req: TimeframeRequest):
     """
     Use Groq LLM to dynamically suggest a realistic timeframe for the given goal.
-    Returns a timeframe string that accounts for the complexity and nature of the goal.
+    Returns a single timeframe string based on the goal, without any hardcoded options.
     """
     try:
         goal = req.goal.strip()
         if not goal:
-            return {"suggested_timeframe": "4-8 weeks"}
+            return {"error": "Goal is required"}, 400
         
         # Use Groq to generate a dynamic timeframe based on the goal
         response = groq_client.chat.completions.create(
             messages=[
                 {
                     "role": "user",
-                    "content": f"""Estimate a realistic learning or completion timeframe for this specific goal.
-Consider:
-- If it's a quick task (cake baking, short article), suggest hours or days
-- If it's a skill to learn (language, programming), suggest weeks or months
-- If it's mastery/deep expertise, suggest months or years
+                    "content": f"""A person wants to: "{goal}"
 
-Goal: "{goal}"
+How long would it realistically take a beginner to complete this from scratch? Give a single honest time estimate. Be specific and practical — if it takes hours, say hours. If it takes days, say days. If it takes weeks or months, say that. Do not default to weeks if the task is shorter.
 
-Respond with ONLY a timeframe string like "2-3 hours", "1-2 days", "2-4 weeks", "2-3 months", "6-12 months", etc.
-Be specific to the goal, not generic. Do not explain, just the timeframe."""
+Reply with only the time estimate. Examples of valid replies: "3-4 hours", "1 day", "3 days", "2 weeks", "3 months". Nothing else."""
                 }
             ],
             model="llama-3.1-8b-instant",
-            temperature=0.5,
+            temperature=0,
             max_tokens=20,
         )
         
         timeframe = response.choices[0].message.content.strip()
-        # Basic validation - if response doesn't look like a timeframe, use default
+        # Basic validation - if response doesn't look like a timeframe, return error
         if not timeframe or len(timeframe) > 50:
-            return {"suggested_timeframe": "4-8 weeks"}
+            logger.warning(f"Invalid timeframe response for goal '{goal}': {timeframe}")
+            return {"error": "Failed to generate timeframe suggestion"}, 400
         
-        return {"suggested_timeframe": timeframe}
+        return {"suggestion": timeframe}
     except Exception as e:
         logger.error(f"Timeframe suggestion error: {e}")
-        return {"suggested_timeframe": "4-8 weeks"}
+        return {"error": f"Failed to suggest timeframe: {str(e)}"}, 500
 
 
 class UpdateTimeframeRequest(BaseModel):

@@ -91,7 +91,11 @@ function presetDisplayLabel(weeksKey, choices) {
 }
 
 /** Plain-language duration for the backend LLM */
-function getApiTimeCommitment(answers, choices) {
+function getApiTimeCommitment(answers, choices, customTimeframe) {
+  // If user provided a custom timeframe, use it directly
+  if (customTimeframe && customTimeframe.trim()) {
+    return customTimeframe.trim()
+  }
   if (isShortActivityChoices(choices)) {
     const h = Number(answers.targetHours)
     const safe = Number.isFinite(h) ? h : 1.5
@@ -105,7 +109,11 @@ function getApiTimeCommitment(answers, choices) {
   return `about ${(mo / 12).toFixed(1)} years total`
 }
 
-function formatCompletionExtra(answers, choices) {
+function formatCompletionExtra(answers, choices, customTimeframe) {
+  // If user provided a custom timeframe, use it directly
+  if (customTimeframe && customTimeframe.trim()) {
+    return `Target completion: ${customTimeframe.trim()} (custom)`
+  }
   const short = isShortActivityChoices(choices)
   if (short) {
     const h = Number(answers.targetHours)
@@ -229,8 +237,10 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
   const [step, setStep]             = useState(prefill ? BASE_STEPS.length - 1 : 0)
   const [loading, setLoading]       = useState(false)
   const [suggesting, setSuggesting] = useState(false)
+  const [suggestError, setSuggestError] = useState('')
   const [error, setError]           = useState('')
   const [classifying, setClassifying] = useState(false)
+  const [customTimeframe, setCustomTimeframe] = useState('')
   const [answers, setAnswers]       = useState(
     prefill ? { ...DEFAULT_ANSWERS, ...prefill } : DEFAULT_ANSWERS
   )
@@ -288,10 +298,10 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
 
   const suggestTimeframe = async () => {
     if (!answers.topic) {
-      setError('Please enter your goal first.')
+      setSuggestError('Please enter your goal first')
       return
     }
-    setError('')
+    setSuggestError('')
     setSuggesting(true)
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/suggest-timeframe`, {
@@ -301,24 +311,15 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
       })
       if (res.ok) {
         const data = await res.json()
-        // Find the choice that matches or is closest to the suggestion
-        const suggested = data.suggested_timeframe
-        const cur = steps.find(s => s.id === 'weeks')
-        if (cur) {
-          // Try to find a matching choice, or just select the first reasonable one
-          const matchChoice = cur.choices.find(c => c.l.includes(suggested.split('-')[0]) || c.l.includes(suggested.split('–')[0]))
-          if (matchChoice) {
-            const m = metricForChoice(matchChoice.v)
-            setAnswers((a) => ({
-              ...a,
-              weeks: matchChoice.v,
-              ...(m.kind !== 'weeks' ? { targetHours: m.value } : {}),
-            }))
-          }
-        }
+        // Set the custom timeframe input directly with the suggestion
+        setCustomTimeframe(data.suggestion || '')
+      } else {
+        const data = await res.json()
+        setSuggestError(data.error || 'Couldn\'t get a suggestion, please try again')
       }
     } catch (err) {
       console.error('Error suggesting timeframe:', err)
+      setSuggestError('Couldn\'t get a suggestion, please try again')
     } finally {
       setSuggesting(false)
     }
@@ -329,7 +330,7 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
   const canNext = cur.type === 'text'
     ? String(val).trim().length > 2
     : cur.id === 'weeks'
-      ? Boolean(answers.weeks)
+      ? Boolean(answers.weeks) || customTimeframe.trim().length > 0
       : val !== '' && val !== undefined
 
   const handleNext = async () => {
@@ -360,9 +361,10 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
           learning_style: "mixed",
           time_commitment: getApiTimeCommitment(
             answers,
-            steps.find((s) => s.id === 'weeks')?.choices || []
+            steps.find((s) => s.id === 'weeks')?.choices || [],
+            customTimeframe
           ),
-          context_extra: formatCompletionExtra(answers, steps.find((s) => s.id === 'weeks')?.choices || []),
+          context_extra: formatCompletionExtra(answers, steps.find((s) => s.id === 'weeks')?.choices || [], customTimeframe),
         }),
       })
       const data = await res.json().catch(() => null)
@@ -428,40 +430,97 @@ export default function OnboardingPage({ onGenerate, onBack, prefill, onMyRoadma
           {cur.type === 'choice' && (
             <div>
               {cur.id === 'weeks' && (
-                <button
-                  onClick={suggestTimeframe}
-                  disabled={suggesting || !answers.topic}
-                  style={{
-                    width: '100%', marginBottom: '12px', padding: '12px',
-                    background: suggesting ? 'rgba(220,38,38,0.15)' : 'rgba(220,38,38,0.1)',
-                    border: '1px solid rgba(220,38,38,0.2)',
-                    color: suggesting ? 'rgba(220,38,38,0.8)' : 'rgba(220,38,38,0.7)',
-                    borderRadius: '12px', cursor: suggesting ? 'wait' : 'pointer',
-                    fontSize: '0.9rem', fontWeight: 600, transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => !suggesting && (e.target.style.background = 'rgba(220,38,38,0.15)')}
-                  onMouseLeave={(e) => !suggesting && (e.target.style.background = 'rgba(220,38,38,0.1)')}
-                >
-                  {suggesting ? '✓ Suggesting...' : '💡 Suggest for me'}
-                </button>
+                <>
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'flex-start' }}>
+                      <input
+                        type="text"
+                        placeholder="e.g. 4 hours, 2 weeks, 3 months"
+                        value={customTimeframe}
+                        onChange={(e) => {
+                          setCustomTimeframe(e.target.value)
+                          setSuggestError('')
+                        }}
+                        style={{
+                          flex: 1, padding: '12px 14px', borderRadius: '10px',
+                          border: '1px solid rgba(220,38,38,0.3)',
+                          background: 'rgba(220,38,38,0.05)', color: '#fff',
+                          fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none',
+                          transition: 'all 0.2s',
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = 'rgba(220,38,38,0.6)'}
+                        onBlur={(e) => e.target.style.borderColor = 'rgba(220,38,38,0.3)'}
+                      />
+                      <button
+                        onClick={suggestTimeframe}
+                        disabled={suggesting || !answers.topic}
+                        style={{
+                          padding: '12px 14px', borderRadius: '10px',
+                          background: suggesting ? 'rgba(107,114,128,0.2)' : 'rgba(220,38,38,0.1)',
+                          border: `1px solid ${suggesting ? 'rgba(107,114,128,0.3)' : 'rgba(220,38,38,0.2)'}`,
+                          color: suggesting ? '#9ca3af' : 'rgba(220,38,38,0.7)',
+                          cursor: suggesting ? 'wait' : 'pointer',
+                          fontSize: '0.85rem', fontWeight: 600, transition: 'all 0.2s',
+                          whiteSpace: 'nowrap', minWidth: 'fit-content',
+                        }}
+                        onMouseEnter={(e) => !suggesting && (e.target.style.background = 'rgba(220,38,38,0.15)')}
+                        onMouseLeave={(e) => !suggesting && (e.target.style.background = 'rgba(220,38,38,0.1)')}
+                        title={!answers.topic ? 'Please enter your goal first' : ''}
+                      >
+                        {suggesting ? '⟳' : '💡'}
+                      </button>
+                    </div>
+                    {suggestError && (
+                      <div style={{ fontSize: '0.85rem', color: '#ef4444', marginBottom: '8px' }}>
+                        {suggestError}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginBottom: '8px' }}>
+                      OR pick a preset:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {cur.choices.map((c) => (
+                        <Choice
+                          key={c.v}
+                          c={c}
+                          selected={answers[cur.field] === c.v}
+                          onSelect={(v) => {
+                            setCustomTimeframe('')
+                            setSuggestError('')
+                            const m = metricForChoice(v)
+                            setAnswers((a) => ({
+                              ...a,
+                              [cur.field]: v,
+                              ...(m.kind !== 'weeks' ? { targetHours: m.value } : {}),
+                            }))
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {cur.choices.map((c) => (
-                  <Choice
-                    key={c.v}
-                    c={c}
-                    selected={answers[cur.field] === c.v}
-                    onSelect={(v) => {
-                      const m = metricForChoice(v)
-                      setAnswers((a) => ({
-                        ...a,
-                        [cur.field]: v,
-                        ...(m.kind !== 'weeks' ? { targetHours: m.value } : {}),
-                      }))
-                    }}
-                  />
-                ))}
-              </div>
+              {cur.id !== 'weeks' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {cur.choices.map((c) => (
+                    <Choice
+                      key={c.v}
+                      c={c}
+                      selected={answers[cur.field] === c.v}
+                      onSelect={(v) => {
+                        const m = metricForChoice(v)
+                        setAnswers((a) => ({
+                          ...a,
+                          [cur.field]: v,
+                          ...(m.kind !== 'weeks' ? { targetHours: m.value } : {}),
+                        }))
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
