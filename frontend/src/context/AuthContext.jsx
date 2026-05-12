@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from '../firebase'
-import { getUserProfile, updateUserStreakOnLogin } from '../lib/firestore'
+import { getUserProfile, updateUserStreakOnLogin, cleanupBrokenRoadmaps } from '../lib/firestore'
 
 const AuthContext = createContext(null)
 
@@ -20,6 +20,9 @@ export function AuthProvider({ children }) {
           const firebaseProfile = await getUserProfile(u.uid)
           const updatedStreak = await updateUserStreakOnLogin(u.uid, firebaseProfile)
           setProfile({ ...firebaseProfile, ...updatedStreak })
+          
+          // Clean up any broken roadmap entries
+          await cleanupBrokenRoadmaps(u.uid)
         } catch (error) {
           console.error('Error loading user profile:', error)
           setProfile(null)

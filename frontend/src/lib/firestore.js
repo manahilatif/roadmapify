@@ -3,7 +3,7 @@
  * Firestore utilities for user profile, progress, and roadmap management.
  */
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp, arrayUnion,
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp, arrayUnion, deleteDoc, query, where,
 } from 'firebase/firestore'
 import { db } from '../firebase'
 
@@ -229,5 +229,35 @@ export async function updateRoadmap(uid, roadmapId, updates) {
   } catch (error) {
     console.error('Error updating roadmap:', error)
     throw error
+  }
+}
+
+/**
+ * Clean up broken roadmap entries (untitled, null, empty titles)
+ * Called on user login to remove ghost entries
+ */
+export async function cleanupBrokenRoadmaps(uid) {
+  try {
+    const roadmapsRef = collection(db, 'users', uid, 'roadmaps')
+    const roadmapsSnap = await getDocs(roadmapsRef)
+    
+    const deletePromises = []
+    roadmapsSnap.forEach(doc => {
+      const data = doc.data()
+      const title = data?.title
+      
+      // Delete if title is missing, null, empty, or "Untitled Roadmap"
+      if (!title || title === '' || title === null || title === 'Untitled Roadmap') {
+        deletePromises.push(deleteDoc(doc.ref))
+      }
+    })
+    
+    if (deletePromises.length > 0) {
+      await Promise.all(deletePromises)
+      console.log(`[Cleanup] Deleted ${deletePromises.length} broken roadmaps`)
+    }
+  } catch (error) {
+    console.error('Error cleaning up broken roadmaps:', error)
+    // Non-fatal — don't throw
   }
 }

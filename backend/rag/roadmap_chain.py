@@ -25,17 +25,65 @@ except ImportError:
         retrieve_context = None
 
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
+    model="llama-3.1-8b-instant",
     groq_api_key=os.getenv("GROQ_API_KEY"),
     temperature=0.7,
-    max_tokens=4096,
+    max_tokens=6000,
 )
+
+# ── Timeframe parsing and node count calculation ────────────────────────────
+
+def parse_timeframe_to_days(timeframe_str: str) -> int:
+    """Parse a timeframe string and return approximate number of days."""
+    timeframe_str = timeframe_str.lower().strip()
+    
+    # Try to extract number and unit
+    match = re.search(r'(\d+)\s*(hour|day|week|month|year)s?', timeframe_str)
+    if not match:
+        return 30  # default to 1 month if parsing fails
+    
+    value, unit = int(match.group(1)), match.group(2)
+    
+    if 'hour' in unit:
+        return value / 24
+    elif 'day' in unit:
+        return value
+    elif 'week' in unit:
+        return value * 7
+    elif 'month' in unit:
+        return value * 30
+    elif 'year' in unit:
+        return value * 365
+    
+    return 30  # default
+
+def calculate_node_count(timeframe_str: str) -> tuple:
+    """Calculate the number of nodes and checkpoints based on timeframe.
+    Returns (total_nodes, num_main_nodes, num_checkpoints, num_bonus_nodes)
+    """
+    days = parse_timeframe_to_days(timeframe_str)
+    
+    # Scaling rules
+    if days < 1:  # Few hours
+        return (4, 3, 0, 1)
+    elif days <= 7:  # 1-7 days
+        return (6, 5, 1, 0)
+    elif days <= 14:  # 1-2 weeks
+        return (8, 6, 1, 1)
+    elif days <= 30:  # 3-4 weeks
+        return (12, 9, 2, 1)
+    elif days <= 90:  # 2-3 months
+        return (18, 14, 2, 2)
+    elif days <= 180:  # 4-6 months
+        return (26, 20, 3, 3)
+    else:  # 6 months or more
+        return (32, 24, 4, 4)
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 #
 # KEY DESIGN DECISIONS:
 #   1. Every placeholder uses [BRACKET] syntax — the model fills these in.
-#   2. All 8 nodes are shown explicitly in the template — no "..." anywhere.
+#   2. Node count is NOT hardcoded — passed as {total_nodes} and {num_main_nodes}
 #   3. JSON braces are escaped as {{ / }} for LangChain's template engine.
 #
 SYSTEM_PROMPT = """You are Roadmapify. Return a complete learning roadmap as a JSON object.
@@ -43,17 +91,19 @@ SYSTEM_PROMPT = """You are Roadmapify. Return a complete learning roadmap as a J
 Context: {context}
 
 RULES:
-1. Output EXACTLY 9 nodes: node_1, node_2, node_3, checkpoint_1, node_4, node_5, node_6, node_7, bonus_1
-2. node_1 status "active"; all others status "locked"
-3. node_1 through node_7 type "main"; checkpoint_1 type "checkpoint"; bonus_1 type "bonus"
-4. **IMPORTANT**: After every 3-4 learning nodes, insert a checkpoint node to reinforce learning.
-5. Checkpoint nodes must include a "quiz_questions" array with 3-5 multiple-choice questions relevant to the preceding nodes.
+1. Output EXACTLY {total_nodes} nodes total: {num_main_nodes} main nodes, {num_checkpoints} checkpoints, and {num_bonus_nodes} bonus nodes
+2. First main node (node_1) status "active"; all others status "locked"
+3. Main nodes: type "main"; Checkpoint nodes: type "checkpoint"; Bonus nodes: type "bonus"
+4. **IMPORTANT**: Insert checkpoint nodes roughly every 25-30% of the way through. Each checkpoint must include a "quiz_questions" array with 3-5 multiple-choice questions.
    Each question: {{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0}}
-6. Each title must be 3-7 words, SPECIFIC to the learner's goal.
+5. Each title must be 3-7 words, SPECIFIC to the learner's goal.
    FORBIDDEN titles: "Getting Started", "Foundation", "Learn basics", "Core Skills", "Introduction", "Overview"
-7. Each main node: steps (3-5 concrete how-to instructions) and resources (2 real https:// URLs)
-8. Checkpoint nodes: only need title, description, and quiz_questions. No steps or resources required.
-9. Do NOT use "..." anywhere. Write all 9 nodes in full.
+6. Each main node: steps (3-5 concrete how-to instructions) and resources (2 real https:// URLs)
+7. Checkpoint nodes: only need title, description, and quiz_questions. No steps or resources required.
+8. Distribute the total timeframe proportionally across all nodes. Each node's duration_label should reflect its position in the timeline.
+   Example: if timeframe is "3 months" and there are 12 nodes, early nodes ≈ "Week 1", middle nodes ≈ "Week 2-3", later nodes ≈ "Week 3-4"
+9. Do NOT use "..." anywhere. Write all {total_nodes} nodes in full.
+10. Calculate total_xp as the sum of all node xp_rewards.
 
 Real resource URLs:
 https://www.ielts.org | https://ieltsliz.com | https://www.ielts-simon.com
@@ -63,158 +113,25 @@ https://developer.mozilla.org | https://docs.python.org/3/tutorial
 https://www.kaggle.com/learn | https://git-scm.com/book/en/v2
 https://tailwindcss.com/docs | https://docs.docker.com/get-started
 
-Return ONLY valid JSON. Start with {{ and end with }}. No markdown. No text outside the JSON.
-
-Template — replace every [PLACEHOLDER] with real goal-specific content:
-{{
-  "title": "[Goal name] Roadmap",
-  "description": "[One sentence about this learning path]",
-  "total_xp": 850,
-  "nodes": [
-    {{
-      "id": "node_1",
-      "title": "[Specific first task for this goal]",
-      "description": "[One sentence explaining what the learner does]",
-      "type": "main",
-      "emoji": "[single emoji]",
-      "duration_label": "Week 1",
-      "xp_reward": 100,
-      "status": "active",
-      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]", "[Exact action 4]"],
-      "resources": [
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
-      ]
-    }},
-    {{
-      "id": "node_2",
-      "title": "[Specific second task for this goal]",
-      "description": "[One sentence]",
-      "type": "main",
-      "emoji": "[single emoji]",
-      "duration_label": "Week 2",
-      "xp_reward": 100,
-      "status": "locked",
-      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
-      "resources": [
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
-      ]
-    }},
-    {{
-      "id": "node_3",
-      "title": "[Specific third task for this goal]",
-      "description": "[One sentence]",
-      "type": "main",
-      "emoji": "[single emoji]",
-      "duration_label": "Week 3",
-      "xp_reward": 100,
-      "status": "locked",
-      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
-      "resources": [
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
-      ]
-    }},
-    {{
-      "id": "checkpoint_1",
-      "title": "Quiz: Review nodes 1-3",
-      "description": "Test your understanding of the first three topics.",
-      "type": "checkpoint",
-      "emoji": "📝",
-      "duration_label": "Week 3-4",
-      "xp_reward": 50,
-      "status": "locked",
-      "quiz_questions": [
-        {{"question": "[Question about node 1, 2, or 3 content]", "options": ["[Option A]", "[Option B]", "[Option C]", "[Option D]"], "correct_index": 0}},
-        {{"question": "[Another question]", "options": ["[Option A]", "[Option B]", "[Option C]", "[Option D]"], "correct_index": 1}},
-        {{"question": "[Another question]", "options": ["[Option A]", "[Option B]", "[Option C]", "[Option D]"], "correct_index": 2}}
-      ]
-    }},
-    {{
-      "id": "node_4",
-      "title": "[Specific fourth task for this goal]",
-      "description": "[One sentence]",
-      "type": "main",
-      "emoji": "[single emoji]",
-      "duration_label": "Week 4",
-      "xp_reward": 110,
-      "status": "locked",
-      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
-      "resources": [
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}},
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
-      ]
-    }},
-    {{
-      "id": "node_5",
-      "title": "[Specific fifth task for this goal]",
-      "description": "[One sentence]",
-      "type": "main",
-      "emoji": "[single emoji]",
-      "duration_label": "Week 5",
-      "xp_reward": 120,
-      "status": "locked",
-      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
-      "resources": [
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
-      ]
-    }},
-    {{
-      "id": "node_6",
-      "title": "[Specific sixth task for this goal]",
-      "description": "[One sentence]",
-      "type": "main",
-      "emoji": "[single emoji]",
-      "duration_label": "Week 6",
-      "xp_reward": 120,
-      "status": "locked",
-      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
-      "resources": [
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
-      ]
-    }},
-    {{
-      "id": "node_7",
-      "title": "[Specific seventh task for this goal]",
-      "description": "[One sentence]",
-      "type": "main",
-      "emoji": "[single emoji]",
-      "duration_label": "Week 7-8",
-      "xp_reward": 150,
-      "status": "locked",
-      "steps": ["[Exact action 1]", "[Exact action 2]", "[Exact action 3]"],
-      "resources": [
-        {{"label": "[Resource name]", "url": "https://[real-url]", "tip": "[Why useful]"}}
-      ]
-    }},
-    {{
-      "id": "bonus_1",
-      "title": "[Advanced challenge title]",
-      "description": "[One sentence]",
-      "type": "bonus",
-      "emoji": "⭐",
-      "duration_label": "Anytime",
-      "xp_reward": 250,
-      "status": "locked",
-      "steps": ["[Advanced step 1]", "[Advanced step 2]"],
-      "resources": []
-    }}
-  ]
-}}"""
+Return ONLY valid JSON. Start with {{ and end with }}. No markdown. No text outside the JSON."""
 
 USER_PROMPT = """Generate the roadmap for:
 
 Goal: {goal}
 Level: {difficulty}
 Timeframe: {time_commitment}
+Total Nodes: {total_nodes}
+Main Nodes: {num_main_nodes}
+Checkpoints: {num_checkpoints}
+Bonus Nodes: {num_bonus_nodes}
 
 The learner expects to finish within this timeframe. Spread milestones across the FULL horizon — for goals of a year or longer, use duration_label values in months/years (phases), not a compressed "Week 1–8" sprint unless the timeframe is actually short.
 
 Replace every [PLACEHOLDER] in the template with real, specific content for this exact goal.
-Output all 9 nodes (node_1 through node_7, plus checkpoint_1 after node_3, and bonus_1). 
-Include 3-5 multiple-choice quiz questions in checkpoint_1 that test understanding of the first 3 nodes.
-Do not skip any node."""
+Output all {total_nodes} nodes as specified above. Distribute the timeframe {time_commitment} proportionally across all nodes.
+Include {num_checkpoints} checkpoint node(s) with 3-5 multiple-choice quiz questions each.
+Include {num_bonus_nodes} bonus node(s) with optional advanced challenges.
+Do not skip any nodes. Generate exactly {total_nodes} nodes."""
 
 
 # ── Local fallback (used when LLM fails both attempts) ────────────────────────
@@ -371,7 +288,7 @@ def _build_fallback(goal: str) -> dict:
 
 # ── Core generation helpers ───────────────────────────────────────────────────
 
-def _call_llm(context_text: str, goal: str, difficulty: str, time_commitment: str) -> dict:
+def _call_llm(context_text: str, goal: str, difficulty: str, time_commitment: str, total_nodes: int, num_main_nodes: int, num_checkpoints: int, num_bonus_nodes: int) -> dict:
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
         ("human",  USER_PROMPT),
@@ -381,6 +298,10 @@ def _call_llm(context_text: str, goal: str, difficulty: str, time_commitment: st
         "goal":            goal,
         "difficulty":      difficulty,
         "time_commitment": time_commitment,
+        "total_nodes":     total_nodes,
+        "num_main_nodes":  num_main_nodes,
+        "num_checkpoints": num_checkpoints,
+        "num_bonus_nodes": num_bonus_nodes,
     })
     raw = response.content.strip()
     raw = re.sub(r'^```(?:json)?\s*', '', raw)
@@ -434,26 +355,37 @@ def generate_roadmap(goal: str, difficulty: str = "beginner", time_commitment: s
         except Exception as e:
             print(f"[RAG] non-fatal: {e}")
 
+    # Calculate dynamic node counts based on timeframe
+    total_nodes, num_main_nodes, num_checkpoints, num_bonus_nodes = calculate_node_count(time_commitment)
+    print(f"[generate_roadmap] timeframe='{time_commitment}' → {total_nodes} nodes ({num_main_nodes} main, {num_checkpoints} checkpoints, {num_bonus_nodes} bonus)")
+
     data = None
     for attempt in range(2):
         try:
-            data = _call_llm(context_text, goal, difficulty, time_commitment)
-            main_nodes = [n for n in data.get("nodes", []) if n.get("type") != "bonus"]
-            if len(main_nodes) >= 4:
-                print(f"[generate_roadmap] attempt {attempt+1}: {len(main_nodes)} main nodes — OK")
+            data = _call_llm(context_text, goal, difficulty, time_commitment, total_nodes, num_main_nodes, num_checkpoints, num_bonus_nodes)
+            nodes = data.get("nodes", [])
+            
+            # Validate that we have at least 3 nodes
+            if len(nodes) >= 3:
+                # Count node types
+                main_nodes = [n for n in nodes if n.get("type") == "main"]
+                checkpoints = [n for n in nodes if n.get("type") == "checkpoint"]
+                bonus_nodes = [n for n in nodes if n.get("type") == "bonus"]
+                
+                print(f"[generate_roadmap] attempt {attempt+1}: {len(nodes)} total nodes ({len(main_nodes)} main, {len(checkpoints)} checkpoints, {len(bonus_nodes)} bonus) — OK")
                 break
-            print(f"[generate_roadmap] attempt {attempt+1}: only {len(main_nodes)} main nodes — retrying")
-            data = None
+            else:
+                print(f"[generate_roadmap] attempt {attempt+1}: only {len(nodes)} nodes (need >= 3) — retrying")
+                data = None
         except Exception as e:
             print(f"[generate_roadmap] attempt {attempt+1} error: {e}")
             data = None
 
     if data is None:
-        print("[generate_roadmap] both attempts failed — using built-in fallback")
-        return _build_fallback(goal)
+        raise ValueError(f"Failed to generate roadmap with at least 3 nodes after 2 attempts. Goal: {goal}, Timeframe: {time_commitment}")
 
     if not data.get("nodes"):
-        return _build_fallback(goal)
+        raise ValueError(f"Generated roadmap has no nodes. Goal: {goal}")
 
     data = _sanitize_urls(data)
     data.setdefault("total_xp", sum(n.get("xp_reward", 100) for n in data["nodes"]))

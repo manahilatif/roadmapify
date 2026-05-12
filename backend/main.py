@@ -234,6 +234,10 @@ async def generate_roadmap_endpoint(req: GenerateRequest):
             time_commitment=time_commitment,
         )
         return result
+    except ValueError as e:
+        # Validation error from generation logic — return 400 instead of fallback
+        logger.error(f"Validation error in generation: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Generation error: {e}", exc_info=True)
         return _fallback(req.goal)
@@ -243,6 +247,38 @@ async def generate_roadmap_endpoint(req: GenerateRequest):
 @app.post("/generate")
 async def generate_alias(req: GenerateRequest):
     return await generate_roadmap_endpoint(req)
+
+
+@app.post("/regenerate-roadmap")
+async def regenerate_roadmap_endpoint(req: GenerateRequest):
+    """
+    Regenerate a roadmap with a new timeframe or updated parameters.
+    Accepts the same parameters as /generate-roadmap.
+    Returns the newly generated roadmap with updated nodes.
+    """
+    # Validate goal
+    is_valid, error_msg = await validate_goal_with_groq(req.goal)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # Resolve field name aliases
+    difficulty      = req.difficulty or req.experience or req.level or "beginner"
+    time_commitment = req.time_commitment or req.timeframe or "1 month"
+
+    try:
+        fn     = get_generate()
+        result = fn(
+            goal=req.goal,
+            difficulty=difficulty,
+            time_commitment=time_commitment,
+        )
+        return result
+    except ValueError as e:
+        logger.error(f"Validation error in regeneration: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Regeneration error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to regenerate roadmap")
 
 
 @app.post("/suggest-timeframe")

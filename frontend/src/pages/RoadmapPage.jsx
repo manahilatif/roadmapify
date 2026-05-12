@@ -728,6 +728,7 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
   const [timeframe, setTimeframe] = useState(data?.timeframe || '')
   const [editingTimeframe, setEditingTimeframe] = useState(false)
   const [timeframeInput, setTimeframeInput] = useState(timeframe)
+  const [regenerating, setRegenerating] = useState(false)
   const [quizNode, setQuizNode] = useState(null)
 
   // Update local streak when profile changes
@@ -752,32 +753,61 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
       return
     }
 
+    setRegenerating(true)
     try {
+      // Regenerate roadmap with new timeframe using the backend /regenerate-roadmap endpoint
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/roadmap/${roadmapId}/timeframe`,
+        `${import.meta.env.VITE_API_URL}/regenerate-roadmap`,
         {
-          method: 'PATCH',
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roadmap_id: roadmapId, timeframe: timeframeInput }),
+          body: JSON.stringify({
+            goal: data?.goal || data?.topic || 'Learning Goal',
+            difficulty: data?.difficulty || 'beginner',
+            time_commitment: timeframeInput,
+          }),
         }
       )
 
       if (res.ok) {
+        const regeneratedRoadmap = await res.json()
+        
+        // Update local state with new nodes and timeframe
+        const newNodes = normalise(regeneratedRoadmap)
+        setNodes(newNodes)
         setTimeframe(timeframeInput)
         setEditingTimeframe(false)
-        // Also update Firestore if user is authenticated
-        if (user) {
+        
+        // Reset earnedXP and streak to 0 for new roadmap
+        setEarnedXP(0)
+        setStreak(profile?.streak || 0)
+        
+        // Update Firestore with new nodes and timeframe
+        if (user && savedRoadmapId) {
           try {
-            const { updateRoadmap: updateRoadmapFS } = await import('../lib/firestore')
-            await updateRoadmapFS(user.uid, roadmapId, { timeframe: timeframeInput })
+            const { updateUserRoadmap } = await import('../lib/firestore')
+            await updateUserRoadmap(user.uid, savedRoadmapId, {
+              topic: data?.topic || 'My roadmap',
+              roadmapData: {
+                ...regeneratedRoadmap,
+                earnedXP: 0,
+                streak: profile?.streak || 0,
+                timeframe: timeframeInput,
+              },
+            })
           } catch (err) {
-            console.error('Error updating Firestore:', err)
+            console.error('Error saving regenerated roadmap:', err)
           }
         }
+      } else {
+        const error = await res.json()
+        alert(`Failed to regenerate roadmap: ${error.detail || 'Unknown error'}`)
       }
     } catch (error) {
-      console.error('Error updating timeframe:', error)
-      setEditingTimeframe(false)
+      console.error('Error regenerating roadmap:', error)
+      alert('Failed to regenerate roadmap. Please try again.')
+    } finally {
+      setRegenerating(false)
     }
   }
 
@@ -853,18 +883,6 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
     setNodes(next)
     const xpReward = node.xp_reward || 100
     setEarnedXP(p => p + xpReward)
-    
-    // Update streak - save to both local state and Firestore
-    setStreak(prevStreak => {
-      const newStreak = prevStreak + 1
-      // Save updated streak to Firestore (if user is authenticated)
-      if (user) {
-        updateUserStreak(user.uid, newStreak).catch(error => {
-          console.error('Error updating streak:', error)
-        })
-      }
-      return newStreak
-    })
 
     // Save node completion to Firestore (if user is authenticated)
     if (user) {
@@ -897,18 +915,6 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
 
     setNodes(next)
     setEarnedXP(p => p + totalXP)
-    
-    // Update streak - save to both local state and Firestore
-    setStreak(prevStreak => {
-      const newStreak = prevStreak + 1
-      // Save updated streak to Firestore (if user is authenticated)
-      if (user) {
-        updateUserStreak(user.uid, newStreak).catch(error => {
-          console.error('Error updating streak:', error)
-        })
-      }
-      return newStreak
-    })
     
     setQuizNode(null)
 
@@ -1017,38 +1023,45 @@ export default function RoadmapPage({ data, onBack, savedRoadmapId = null, onPro
                 value={timeframeInput}
                 onChange={(e) => setTimeframeInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleTimeframeUpdate()
+                  if (e.key === 'Enter' && !regenerating) handleTimeframeUpdate()
                   if (e.key === 'Escape') setEditingTimeframe(false)
                 }}
+                disabled={regenerating}
                 autoFocus
                 style={{
                   padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(229,41,41,0.4)',
                   background: 'rgba(229,41,41,0.08)', color: '#fff', fontSize: 12,
-                  fontFamily: 'inherit', outline: 'none',
+                  fontFamily: 'inherit', outline: 'none', opacity: regenerating ? 0.6 : 1,
+                  cursor: regenerating ? 'not-allowed' : 'text',
                 }}
                 placeholder="e.g. 4-6 weeks"
               />
               <button
                 onClick={handleTimeframeUpdate}
+                disabled={regenerating}
                 style={{
-                  padding: '4px 10px', borderRadius: 6, background: 'rgba(229,41,41,0.2)',
-                  border: '1px solid rgba(229,41,41,0.3)', color: '#e52929', fontSize: 11,
-                  cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s',
+                  padding: '4px 10px', borderRadius: 6, background: regenerating ? 'rgba(107,114,128,0.2)' : 'rgba(229,41,41,0.2)',
+                  border: regenerating ? '1px solid rgba(107,114,128,0.3)' : '1px solid rgba(229,41,41,0.3)', 
+                  color: regenerating ? '#9ca3af' : '#e52929', fontSize: 11,
+                  cursor: regenerating ? 'not-allowed' : 'pointer', fontWeight: 600, transition: 'all 0.2s',
+                  opacity: regenerating ? 0.7 : 1,
                 }}
-                onMouseEnter={(e) => e.target.style.background = 'rgba(229,41,41,0.3)'}
-                onMouseLeave={(e) => e.target.style.background = 'rgba(229,41,41,0.2)'}
+                onMouseEnter={(e) => { if (!regenerating) e.target.style.background = 'rgba(229,41,41,0.3)' }}
+                onMouseLeave={(e) => { if (!regenerating) e.target.style.background = 'rgba(229,41,41,0.2)' }}
               >
-                Save
+                {regenerating ? '⟳ Regenerating...' : 'Save'}
               </button>
               <button
                 onClick={() => setEditingTimeframe(false)}
+                disabled={regenerating}
                 style={{
                   padding: '4px 10px', borderRadius: 6, background: 'transparent',
                   border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)',
-                  fontSize: 11, cursor: 'pointer', transition: 'all 0.2s',
+                  fontSize: 11, cursor: regenerating ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
+                  opacity: regenerating ? 0.5 : 1,
                 }}
-                onMouseEnter={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.4)'}
-                onMouseLeave={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
+                onMouseEnter={(e) => { if (!regenerating) e.target.style.borderColor = 'rgba(255,255,255,0.4)' }}
+                onMouseLeave={(e) => { if (!regenerating) e.target.style.borderColor = 'rgba(255,255,255,0.2)' }}
               >
                 Cancel
               </button>
