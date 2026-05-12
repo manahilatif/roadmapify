@@ -29,8 +29,8 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:3000",
         "https://roadmapify-tan.vercel.app",
-        "https://roadmapify.vercel.app",
-        "https://*.vercel.app",
+        # "https://roadmapify.vercel.app",
+        # "https://*.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -240,7 +240,7 @@ async def generate_roadmap_endpoint(req: GenerateRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Generation error: {e}", exc_info=True)
-        return _fallback(req.goal)
+        raise HTTPException(status_code=500, detail="Roadmap generation failed. Please try again.")
 
 
 # Alias so nothing breaks if frontend calls /generate
@@ -399,122 +399,3 @@ def get_progress(roadmap_id: str):
             "total": total, "percentage": round(done / total * 100) if total else 0}
 
 
-def _fallback(goal: str) -> dict:
-    g = goal.strip()
-    return {
-        "title":       f"{g} Roadmap",
-        "description": "A personalized step-by-step learning journey",
-        "total_xp":    650,
-        "nodes": [
-            {
-                "id": "node_1",
-                "title": f"Understand what {g} involves",
-                "description": f"Research the full scope of {g} and set clear milestones.",
-                "type": "main", "emoji": "🔍",
-                "duration_label": "Week 1", "xp_reward": 80,
-                "status": "active",
-                "steps": [
-                    f"Search online for '{g} beginner guide' and read 2-3 overviews",
-                    "Write down what skills or knowledge you need to acquire",
-                    "Set a measurable goal (e.g. score, project, or certification)",
-                    "Find a community or forum related to this topic",
-                ],
-                "resources": [
-                    {"label": "freeCodeCamp", "url": "https://www.freecodecamp.org", "tip": "Free and comprehensive"},
-                    {"label": "Reddit learning communities", "url": "https://www.reddit.com/r/learnprogramming", "tip": "Ask questions and find guidance"},
-                ],
-            },
-            {
-                "id": "node_2",
-                "title": "Set up your learning environment",
-                "description": "Install tools, accounts, and materials you need to start.",
-                "type": "main", "emoji": "⚙️",
-                "duration_label": "Week 1-2", "xp_reward": 80,
-                "status": "locked",
-                "steps": [
-                    "Create any required accounts (e.g. course platforms, official sites)",
-                    "Download or install recommended tools and software",
-                    "Bookmark key reference sites for quick access",
-                    "Set a daily practice schedule in your calendar",
-                ],
-                "resources": [
-                    {"label": "MDN Web Docs", "url": "https://developer.mozilla.org", "tip": "Official reference"},
-                    {"label": "The Odin Project", "url": "https://www.theodinproject.com", "tip": "Structured free curriculum"},
-                ],
-            },
-            {
-                "id": "node_3",
-                "title": "Complete your first practice session",
-                "description": "Apply what you learned in a real hands-on exercise.",
-                "type": "main", "emoji": "✏️",
-                "duration_label": "Week 2-3", "xp_reward": 100,
-                "status": "locked",
-                "steps": [
-                    "Pick one beginner exercise or practice test",
-                    "Work through it without help first",
-                    "Review your mistakes and note areas to improve",
-                    "Repeat with a new exercise the next day",
-                ],
-                "resources": [
-                    {"label": "Kaggle Learn", "url": "https://www.kaggle.com/learn", "tip": "Hands-on micro-courses"},
-                ],
-            },
-            {
-                "id": "node_4",
-                "title": "Build core skills with focused practice",
-                "description": "Drill the key skills needed for your goal.",
-                "type": "main", "emoji": "🏋️",
-                "duration_label": "Week 3-5", "xp_reward": 120,
-                "status": "locked",
-                "steps": [
-                    "Identify your 2 weakest areas from earlier practice",
-                    "Spend 30 min/day on each weak area for one week",
-                    "Track your progress with a simple log",
-                ],
-                "resources": [],
-            },
-            {
-                "id": "node_5",
-                "title": "Take a full mock test or build a project",
-                "description": "Simulate the real goal to measure your readiness.",
-                "type": "main", "emoji": "🎯",
-                "duration_label": "Week 5-6", "xp_reward": 150,
-                "status": "locked",
-                "steps": [
-                    "Find a full mock test or project brief matching your goal",
-                    "Complete it under realistic conditions (timed if applicable)",
-                    "Score or review your output honestly",
-                    "List specific improvements for the next attempt",
-                ],
-                "resources": [],
-            },
-            {
-                "id": "node_6",
-                "title": "Review, refine and repeat",
-                "description": "Use your mock results to close remaining gaps.",
-                "type": "main", "emoji": "🔄",
-                "duration_label": "Week 6+", "xp_reward": 120,
-                "status": "locked",
-                "steps": [
-                    "Revisit weakest areas identified from mock test",
-                    "Do targeted exercises for each gap",
-                    "Take a second mock test to confirm improvement",
-                ],
-                "resources": [],
-            },
-            {
-                "id": "bonus_1",
-                "title": "Go beyond — advanced challenge",
-                "description": "Push past your initial goal with an advanced project or stretch target.",
-                "type": "bonus", "emoji": "⭐",
-                "duration_label": "Anytime", "xp_reward": 250,
-                "status": "locked",
-                "steps": [
-                    "Set a stretch goal 20% harder than your original target",
-                    "Find an advanced resource or mentor for this level",
-                    "Document your journey and share it with your community",
-                ],
-                "resources": [],
-            },
-        ],
-    }

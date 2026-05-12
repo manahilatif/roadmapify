@@ -20,7 +20,7 @@ from backend.rag.embedder import get_collection
 _collection = get_collection()
 
 
-def retrieve_context(query: str, n_results: int = 8) -> str:
+def retrieve_context(query: str, n_results: int = 8) -> list[dict]:
     """
     Query ChromaDB for the most relevant chunks to the given user query.
 
@@ -29,7 +29,8 @@ def retrieve_context(query: str, n_results: int = 8) -> str:
         n_results: number of top chunks to retrieve
 
     Returns:
-        A single string of retrieved context chunks joined by double newlines.
+        List of dicts, each with 'content' plus all metadata fields
+        (source, domain, topic, url, etc.) from the stored chunk.
     """
     results = _collection.query(
         query_texts=[query],
@@ -37,9 +38,10 @@ def retrieve_context(query: str, n_results: int = 8) -> str:
         include=["documents", "metadatas"],
     )
 
-    docs = results["documents"][0]
+    docs   = results["documents"][0]
+    metas  = results["metadatas"][0]
 
     if not docs:
-        return "No relevant context found in knowledge base."
+        return []
 
-    return "\n\n".join(docs)
+    return [{"content": doc, **meta} for doc, meta in zip(docs, metas)]
